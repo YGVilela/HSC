@@ -101,7 +101,7 @@ clone_contribution_dist <- clone_data %>%
     
     return(data.frame(
       Clone_Contribution = 10**hist_data$breaks[non_zero],
-      Frequency = hist_data$counts[non_zero]/curr_data$Cell_Count[1]
+      Frequency = hist_data$counts[non_zero]/length(curr_data$Clone_Size)
     ))
   }) %>%
   ungroup()
@@ -223,6 +223,56 @@ inferred_clone_data <- clone_data %>%
 
 names(inferred_clone_data) <- c("Z13264", "Z14004")
 
+# Other data ####
+data_tps <- list(
+  "Z13264" = (clones_over_time %>% filter(Subject == "Z13264"))$Time,
+  "Z14004" = (clones_over_time %>% filter(Subject == "Z14004"))$Time
+)
+all_data_tps <- sort(clones_over_time$Time)
+
+data_sample_sizes <- list(
+  "Z13264" = clone_data %>%
+    filter(Subject == "Z13264") %>%
+    group_by(Time) %>%
+    summarize(Cell_Count = min(Cell_Count), .groups = "drop"),
+  
+  "Z14004" = clone_data %>%
+    filter(Subject == "Z14004") %>%
+    group_by(Time) %>%
+    summarize(Cell_Count = min(Cell_Count), .groups = "drop")
+)
+
+sample_sizes_vector <- list(
+  "Z13264" = data_sample_sizes[["Z13264"]]$Cell_Count,
+  "Z14004" = data_sample_sizes[["Z14004"]]$Cell_Count
+)
+names(sample_sizes_vector[["Z13264"]]) <- paste0("t", data_tps[["Z13264"]])
+names(sample_sizes_vector[["Z14004"]]) <- paste0("t", data_tps[["Z14004"]])
+
+# Get contributions histogram breaks
+break_list <- list(
+  "Z13264" = lapply(data_tps[["Z13264"]], function(tp) {
+    curr_data <- clone_data %>%
+      filter(Subject == "Z13264" & Time == tp)
+    
+    hist_data <- hist(log10(curr_data$Clone_Size/curr_data$Cell_Count), plot = FALSE)
+    
+    return(c(-Inf, hist_data$breaks, 0))
+  }),
+  
+  "Z14004" = lapply(data_tps[["Z14004"]], function(tp) {
+    curr_data <- clone_data %>%
+      filter(Subject == "Z14004" & Time == tp)
+    
+    hist_data <- hist(log10(curr_data$Clone_Size/curr_data$Cell_Count), plot = FALSE)
+    
+    return(c(-Inf, hist_data$breaks, 0))
+  })
+)
+
+names(break_list[["Z13264"]]) <- paste0("t", data_tps[["Z13264"]])
+names(break_list[["Z14004"]]) <- paste0("t", data_tps[["Z14004"]])
+
 # Save data ####
 save(
   raw_data, extracted_data,
@@ -234,5 +284,11 @@ save(
   clones_over_time,
   so_occurence,
   inferred_clone_data,
+  
+  data_tps,
+  all_data_tps,
+  sample_sizes_vector,
+  break_list,
+  
   file = "data/derived_radtke.Rda"
 )

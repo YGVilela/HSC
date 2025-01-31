@@ -43,9 +43,14 @@ get_diversity_df <- function(sim_data, tps = NULL) {
   ))
 }
 
-get_contribution_dist_df <- function(sim_data, tps = NULL) {
+get_contribution_dist_df <- function(sim_data, tps = NULL, break_list = NULL) {
   if(is.null(tps)) {
     tps <- as.integer(substring(colnames(sim_data), 2))
+  }
+  
+  if(is.null(break_list)) {
+    break_list <- rep("Sturges", length(tps))
+    names(break_list) <- paste0("t", tps)
   }
   
   return(data.frame(do.call(rbind, lapply(tps, function(tp) {
@@ -55,7 +60,11 @@ get_contribution_dist_df <- function(sim_data, tps = NULL) {
     existing_clone_data <- curr_data[existing_clones]
     
     cell_count <- sum(existing_clone_data)
-    hist_data <- hist(log10(existing_clone_data/cell_count), plot = FALSE)
+    hist_data <- hist(
+      log10(existing_clone_data/cell_count), 
+      plot = FALSE,
+      breaks = break_list[[paste0("t", tp)]]
+    )
     non_zero <- which(hist_data$counts > 0)
     
     return(data.frame(
@@ -63,7 +72,7 @@ get_contribution_dist_df <- function(sim_data, tps = NULL) {
       Engrafment_Phase = engrafment_phase(tp),
       
       Clone_Contribution = 10**hist_data$breaks[non_zero],
-      Frequency = hist_data$counts[non_zero]/cell_count
+      Frequency = hist_data$counts[non_zero]/length(existing_clones)
     ))
   }))))
 }
