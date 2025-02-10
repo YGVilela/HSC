@@ -1,18 +1,18 @@
 source("src/optimization.R")
 
-sim_results_file <- "data/par_space_diffs.Rda"
+sim_results_file <- "data/one_cell/par_space_diffs.Rda"
 
 if(!file.exists(sim_results_file)) {
   nr_samples <- 1000
-  cores <- parallel::detectCores()
+  cores <- min(100, parallel::detectCores())
   
   # Two compartments (simulations) ####
   sample_pars <- data.frame(
-    pA = sample(seq(0.5, 0.9, length.out = nr_samples)),
-    dA = sample(seq(0.05, 0.1, length.out = nr_samples)),
+    pA = sample(seq(0.4, 0.9, length.out = nr_samples)),
+    dA = sample(seq(0.025, 0.15, length.out = nr_samples)),
     tAQ = sample(seq(0.01, 0.075, length.out = nr_samples)),
-    tQA = sample(seq(0.001, 0.03, length.out = nr_samples)),
-    clone_mult = sample(seq(3, 10, length.out = nr_samples)),
+    tQA = sample(seq(0.0001, 0.03, length.out = nr_samples)),
+    clone_mult = sample(seq(3, 12, length.out = nr_samples)),
     space_mult_A = sample(seq(1, 5, length.out = nr_samples)),
     space_mult_Q = sample(seq(1, 5, length.out = nr_samples))
   )
@@ -22,11 +22,23 @@ if(!file.exists(sim_results_file)) {
     1:nr_samples, 
     function(idx) 
       tryCatch(
-        run_two_compartments(as.list(sample_pars[idx, ])),
+        {
+          print(paste("Starting", idx))
+          start_time <- Sys.time()
+          
+          ret <- run_one_cell(as.list(sample_pars[idx, ]))
+          
+          end_time <- Sys.time()
+          print(paste("Done with", idx))
+          print(end_time - start_time)
+          
+          return(ret)
+        },
         error = function(e) {
+          print(paste("Error in", idx))
           print(conditionMessage(e))
           
-          return(Inf)
+          return(NULL)
         } 
       ),
     mc.cores = cores
@@ -39,6 +51,11 @@ if(!file.exists(sim_results_file)) {
   full_df <- do.call(rbind, lapply(1:nr_samples, function(idx) {
     tryCatch(
       {
+        if(is.null(diffs[[idx]])) {
+          print(paste(idx, "is NULL"))
+          return(NULL)
+        }
+        
         df <- get_full_diffs_df(diffs[[idx]])
         
         df$Sim_Idx <- idx
@@ -46,6 +63,7 @@ if(!file.exists(sim_results_file)) {
         return(df)
       },
       error = function(e) {
+        print(paste("Error in", idx))
         print(conditionMessage(e))
         return(NULL)
       }
@@ -60,6 +78,8 @@ if(!file.exists(sim_results_file)) {
 } else {
   print("Simulation data already exists.")
 }
+
+stop("Ok")
 
 # Plotting results ####
 
@@ -191,7 +211,7 @@ get_all_plots <- function(file_name, plt_title, run_func = NULL, top_number = 10
     )
   
   # Par space points ####
-  pars_with_residuals <- cbind(sample_pars, Res = final_value_df$Final_Value) %>%
+  pars_with_residuals <- cbind(sample_pars[final_value_df$Sim_Idx,], Res = final_value_df$Final_Value) %>%
     arrange(Res)
   parameter_pairs <- do.call(rbind, expand.grid(
     colnames((pars_with_residuals %>% select(!Res))),
@@ -248,7 +268,7 @@ get_all_plots <- function(file_name, plt_title, run_func = NULL, top_number = 10
     geom_point(
       data = best_pars_pairs,
       mapping = aes(
-        color = paste(str_split(intToUtf8(64 + Fit), "")[[1]], round(Res, digits = 2), sep = ": ")
+        color = paste(strsplit(intToUtf8(64 + Fit), "")[[1]], round(Res, digits = 2), sep = ": ")
       ),
       shape = "cross",
       stroke = 2
@@ -348,7 +368,7 @@ get_all_plots <- function(file_name, plt_title, run_func = NULL, top_number = 10
       aes(
         x = X,
         y = Y,
-        color = str_split(intToUtf8(64 + Sim_Idx), "")[[1]],
+        color = strsplit(intToUtf8(64 + Sim_Idx), "")[[1]],
         linetype = "Simulation",
         group = interaction(Sim_Idx, Subject)
       )
@@ -443,13 +463,13 @@ get_normalized_residuals <- function(file_name) {
 two_compartment_plots <- get_all_plots(
   sim_results_file,
   "Two Compartments",
-  run_func = run_two_compartments,
+  run_func = run_one_cell,
   top_number = 5
 )
 
 save(
   two_compartment_plots,
-  file = "data/residual_weights_plots.Rda"
+  file = "data/one_cell/residual_weights_plots.Rda"
 )
 
 get_point_weights <- function(file_name) {
@@ -506,6 +526,5 @@ graph_weights <- two_point_weights$Graph_Weight
 
 save(
   point_weights, graph_weights,
-  file = "data/two_comp_weights.Rda"
+  file = "data/one_cell/weights.Rda"
 )
-
