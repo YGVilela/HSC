@@ -5,11 +5,11 @@ library(tidyverse)
 base_path <- "data/one_cell_v2"
 
 # Solution plots ####
-get_best_sim_data <- function(sim_prefix, nr_sims = 1) {
+get_best_sim_data <- function(sim_prefix, nr_sims = 1, base_path = base_path, func = run_one_cell) {
   load(paste0(base_path, "/", sim_prefix, "_final.Rda"))
   load("data/one_cell/weights.Rda")
   
-  best_data <- run_one_cell(
+  best_data <- func(
     ga_res@solution[1, ],
     return_result = TRUE,
     nr_sims = nr_sims,
@@ -121,13 +121,24 @@ get_best_sim_data <- function(sim_prefix, nr_sims = 1) {
   ))
 }
 
-best_two <- get_best_sim_data("ga_two", nr_sims = 10)
-best_pQ <- get_best_sim_data("ga_pQ", nr_sims = 10)
+st <- Sys.time()
+best_two_full <- get_best_sim_data("ga_two", nr_sims = 10, base_path = "data/one_cell")
+best_two_reduced <- get_best_sim_data("ga_two", nr_sims = 10, base_path = "data/one_cell_v2")
+best_pQ_full <- get_best_sim_data("ga_pQ", nr_sims = 10, base_path = "data/one_cell")
+best_pQ_reduced <- get_best_sim_data("ga_pQ", nr_sims = 10, base_path = "data/one_cell_v2")
+best_no_pA <- get_best_sim_data("ga", nr_sims = 10, base_path = "data/no_pA", func = run_no_pA)
+et <- Sys.time()
+print(et - st)
+
+# save(best_two, best_pQ, file = "something.Rda")
 
 # Diversity plots ####
 best_div <- bind_rows(
-  "No pQ" = best_two$Diversity,
-  "With pQ" = best_pQ$Diversity,
+  "With pQ (06.01.25)" = best_pQ_full$Diversity,
+  "With pQ (12.01.25)" = best_pQ_reduced$Diversity,
+  "No pQ (06.01.25)" = best_two_full$Diversity,
+  "No pQ (12.01.25)" = best_two_reduced$Diversity,
+  "No pA" = best_no_pA$Diversity,
   .id = "Source"
 )
 
@@ -155,8 +166,11 @@ ggplot(
 
 # SO plots ####
 best_so <- bind_rows(
-  "No pQ" = best_two$SO,
-  "With pQ" = best_pQ$SO,
+  "With pQ (06.01.25)" = best_pQ_full$SO,
+  "With pQ (12.01.25)" = best_pQ_reduced$SO,
+  "No pQ (06.01.25)" = best_two_full$SO,
+  "No pQ (12.01.25)" = best_two_reduced$SO,
+  "No pA" = best_no_pA$SO,
   .id = "Source"
 )
 
@@ -184,8 +198,11 @@ ggplot(
 
 # Contribution plots ####
 best_cont <- bind_rows(
-  "No pQ" = best_two$Contribution,
-  "With pQ" = best_pQ$Contribution,
+  "With pQ (06.01.25)" = best_pQ_full$Contribution,
+  "With pQ (12.01.25)" = best_pQ_reduced$Contribution,
+  "No pQ (06.01.25)" = best_two_full$Contribution,
+  "No pQ (12.01.25)" = best_two_reduced$Contribution,
+  "No pA" = best_no_pA$Contribution,
   .id = "Source"
 )
 
@@ -213,8 +230,11 @@ ggplot(
 
 # Residuals ####
 best_residuals <- bind_rows(
-  "No pQ" = best_two$Residuals,
-  "With pQ" = best_pQ$Residuals,
+  "With pQ (06.01.25)" = best_pQ_full$Residuals,
+  "With pQ (12.01.25)" = best_pQ_reduced$Residuals,
+  "No pQ (06.01.25)" = best_two_full$Residuals,
+  "No pQ (12.01.25)" = best_two_reduced$Residuals,
+  "No pA" = best_no_pA$Residuals,
   .id = "Source"
 )
 
@@ -227,9 +247,9 @@ ggplot(
     Source,
     Total
   )
-) + 
+) +
+  geom_violin(draw_quantiles = c(0.25, 0.5, 0.75)) +
   geom_point() +
-  stat_summary(fun.data = function(dt) mean_sdl(dt, mult = 1)) +
   labs(
     title = "Total Residual Variance",
     y = "Total Residual"
@@ -265,6 +285,41 @@ ggplot(
   )
 
 # Single Point Residuals ####
+best_residuals %>%
+  group_by(Aspect, Source, X) %>%
+  summarise(Res = mean(Res), .groups = "drop") %>%
+  pivot_wider(names_from = Source, values_from = Res) %>%
+  GGally::ggpairs(
+    mapping = aes(colour = Aspect),
+    diag = list(continuous = function(data, mapping, ...) {
+      mapping$colour <- NULL
+      GGally::ggally_densityDiag(data, mapping)
+    }),
+    lower = list(continuous = function(data, mapping, ...) {
+      GGally::ggally_points(data, mapping) +
+        geom_abline(slope = 1, color = "red")
+    }),
+    upper = list(continuous = "blank"), 
+    columns = 3:10,
+    legend = c(2, 1)
+  )
+
+best_residuals %>%
+  group_by(Aspect, Source) %>%
+  summarise(RSS = mean(RSS), .groups = "drop") %>%
+  pivot_wider(names_from = Source, values_from = RSS) %>%
+  GGally::ggpairs(
+    mapping = aes(colour = Aspect),
+    diag = list(continuous = "blankDiag"),
+    lower = list(continuous = function(data, mapping, ...) {
+      GGally::ggally_points(data, mapping) +
+        geom_abline(slope = 1, color = "red")
+    }),
+    upper = list(continuous = "blank"), 
+    columns = 2:9,
+    legend = c(2, 1)
+  )
+
 ggplot(
   data = merge(
     best_residuals %>% filter(Source == "No pQ"),
@@ -367,7 +422,12 @@ non_par_cols <- c(
   "Last_Generation",
   "Total_Generations"
 )
-read_par_space <- function(sim_prefix, par_names) {
+read_par_space <- function(
+    sim_prefix, 
+    base_path,
+    min_gen = 1,
+    max_gen = Inf
+  ) {
   fl <- list.files(
     path = base_path,
     pattern = paste0(sim_prefix, "_[0-9]+\\.Rda")
@@ -376,6 +436,50 @@ read_par_space <- function(sim_prefix, par_names) {
   do.call(rbind, lapply(fl, function(fn) {
     generation <- strsplit(fn, paste0(sim_prefix, "_"))[[1]][2]
     generation <- as.integer(strsplit(generation, ".Rda")[[1]][1])
+    
+    if(generation < min_gen | generation > max_gen) {
+      return(NULL)
+    }
+    
+    load(paste0(base_path, "/", fn))
+    
+    df <- data.frame(curr_ga@population)
+    colnames(df) <- curr_ga@names
+    df$Res <- -curr_ga@fitness
+    df$Generation <- generation
+    
+    return(df)
+  })) %>%
+    group_by(across(c(-Res, - Generation))) %>% 
+    summarise(
+      Mean_Res = mean(Res),
+      Sd_Res = sd(Res),
+      First_Generation = min(Generation),
+      Last_Generation = max(Generation),
+      Total_Generations = length(Generation),
+      .groups = "drop"
+    )
+}
+
+read_par_space_old <- function(
+    sim_prefix,
+    par_names,
+    base_path,
+    min_gen = 1,
+    max_gen = Inf
+) {
+  fl <- list.files(
+    path = base_path,
+    pattern = paste0(sim_prefix, "_[0-9]+\\.Rda")
+  )
+  
+  do.call(rbind, lapply(fl, function(fn) {
+    generation <- strsplit(fn, paste0(sim_prefix, "_"))[[1]][2]
+    generation <- as.integer(strsplit(generation, ".Rda")[[1]][1])
+    
+    if(generation < min_gen | generation > max_gen) {
+      return(NULL)
+    }
     
     load(paste0(base_path, "/", fn))
     
@@ -397,24 +501,55 @@ read_par_space <- function(sim_prefix, par_names) {
     )
 }
 
+par_space_no_pA <- read_par_space(
+  "ga",
+  base_path = "data/no_pQ"
+)
+
 par_space_two <- read_par_space(
   "ga_two",
-  c("pA", "dA", "tQA", "tAQ", "clone_mult", "space_mult_A", "space_mult_Q")
+  base_path = "data/one_cell_v2"
 )
 
 par_space_pQ <- read_par_space(
   "ga_pQ",
-  c("pA", "dA", "tQA", "tAQ", "clone_mult", "space_mult_A", "space_mult_Q", "pQ")
+  base_path = "data/one_cell_v2"
 )
+
+par_space_pQ_old <- read_par_space_old(
+  "ga_pQ",
+  c("pA", "dA", "tQA", "tAQ", "clone_mult", "space_mult_A", "space_mult_Q", "pQ"),
+  base_path = "data/one_cell",
+  max_gen = 10
+)
+
+par_space_two_old <- read_par_space_old(
+  "ga_two",
+  c("pA", "dA", "tQA", "tAQ", "clone_mult", "space_mult_A", "space_mult_Q"),
+  base_path = "data/one_cell",
+  max_gen = 50
+)
+
+par_space_no_pA <- read_par_space("ga", base_path = "data/no_pQ")
 
 # Param distribution for last generation ####
 ggplot(
   bind_rows(
-    "With pQ" = par_space_pQ,
-    "No pQ" = par_space_two,
+    "With pQ" = par_space_pQ %>%
+      # filter(Last_Generation == max(Last_Generation)),
+      slice_min(Mean_Res, n = 100),
+    "No pQ" = par_space_two %>%
+      # filter(Last_Generation == max(Last_Generation)),
+      slice_min(Mean_Res, n = 100),
+
+    "With pQ (old)" = par_space_pQ_old %>%
+      # filter(Last_Generation == max(Last_Generation)),
+      slice_min(Mean_Res, n = 100),
+    "No pQ (old)" = par_space_two_old %>%
+      # filter(Last_Generation == max(Last_Generation)),
+      slice_min(Mean_Res, n = 100),
     .id = "Model"
-  ) %>% 
-    filter(Last_Generation == max(Last_Generation)) %>%
+  ) %>%
     pivot_longer(!c(non_par_cols, "Model")),
   aes(
     x = value,
@@ -430,55 +565,63 @@ ggplot(
   )
 
 # Param distribution over time ####
-ggplot(
-  par_space_pQ %>% 
-    filter(Mean_Res < 10) %>%
-    filter(
-      Last_Generation %in% c(
-        min(Last_Generation),
-        ceiling((max(Last_Generation) - min(Last_Generation))/2),
-        max(Last_Generation)
-      )
-    ) %>%
-    pivot_longer(!non_par_cols),
-  aes(
-    x = value,
-    y = after_stat(density),
-    color = as.factor(Last_Generation),
-    group = interaction(Last_Generation)
-  )
-) + 
-  geom_density() +
-  facet_wrap(vars(name), scales = "free") +
-  labs(
-    title = "Parameter Distributions (With pQ)",
-    color = "Generation"
-  )
+# With pQ
+{
+  ggplot(
+    par_space_pQ_old %>% 
+      filter(Mean_Res < 10) %>%
+      filter(
+        Last_Generation == 10
+      ) %>%
+      pivot_longer(!non_par_cols),
+    aes(
+      x = value,
+      y = after_stat(density)
+      # color = as.factor(Last_Generation),
+      # group = interaction(Last_Generation)
+    )
+  ) + 
+    geom_density() +
+    geom_density(data = par_space_pQ_old %>% 
+                   filter(Mean_Res < 10) %>%
+                   filter(
+                     First_Generation == 1
+                   ) %>%
+                   pivot_longer(!non_par_cols), color = "red") +
+    facet_wrap(vars(name), scales = "free") +
+    labs(
+      title = "Parameter Distributions (With pQ)",
+      color = "Generation"
+    )
+}
 
-ggplot(
-  par_space_two %>% 
-    filter(Mean_Res < 10) %>%
-    filter(
-      Last_Generation %in% c(
-        min(Last_Generation),
-        ceiling((max(Last_Generation) - min(Last_Generation))/2),
-        max(Last_Generation)
-      )
-    ) %>%
-    pivot_longer(!Last_Generation & !First_Generation & !Total_Generations),
-  aes(
-    x = value,
-    y = after_stat(density),
-    color = as.factor(Last_Generation),
-    group = interaction(Last_Generation)
-  )
-) + 
-  geom_density() +
-  facet_wrap(vars(name), scales = "free") +
-  labs(
-    title = "Parameter Distributions (No pQ)",
-    color = "Generation"
-  )
+# No pQ
+{
+  ggplot(
+    par_space_two %>% 
+      filter(Mean_Res < 10) %>%
+      filter(
+        Last_Generation %in% c(
+          min(Last_Generation),
+          ceiling((max(Last_Generation) - min(Last_Generation))/2),
+          max(Last_Generation)
+        )
+      ) %>%
+      pivot_longer(!non_par_cols),
+    aes(
+      x = value,
+      y = after_stat(density),
+      color = as.factor(Last_Generation),
+      group = interaction(Last_Generation)
+    )
+  ) + 
+    geom_density() +
+    facet_wrap(vars(name), scales = "free") +
+    labs(
+      title = "Parameter Distributions (No pQ)",
+      color = "Generation"
+    )
+}
 
 # Param pairs (With pQ) ####
 {
@@ -498,7 +641,9 @@ ggplot(
   
   relevant_percentiles <- c(0, 1, 5, 10, 50, 100)
   percentile_limits <- quantile(
-    (par_space_pQ %>% filter(Last_Generation == max(Last_Generation)))$Mean_Res,
+    (par_space_pQ %>%
+       filter(Last_Generation >= max(Last_Generation) - 2))$Mean_Res,
+       # filter(Last_Generation == max(Last_Generation)))$Mean_Res,
     relevant_percentiles/100
   )
   names(percentile_limits) <- c(
@@ -521,7 +666,8 @@ ggplot(
   ggplot() +
     geom_density(
       data = par_space_pQ %>%
-        filter(Last_Generation == max(Last_Generation)),
+        # filter(Last_Generation == max(Last_Generation)),
+        filter(Last_Generation >= max(Last_Generation) - 2),
       mapping = aes(
         x = Mean_Res
       )
@@ -553,7 +699,8 @@ ggplot(
     ) +
     geom_point(
       data = pairs_pQ %>% 
-        filter(Last_Generation == max(Last_Generation)) %>%
+        # filter(Last_Generation == max(Last_Generation)) %>%
+        filter(Last_Generation >= max(Last_Generation) - 2) %>%
         mutate(
           Pct_Idx = findInterval(
             Mean_Res,
@@ -661,6 +808,7 @@ ggplot(
     geom_point(
       data = pairs_two %>% 
         filter(Last_Generation == max(Last_Generation)) %>%
+        # filter(Last_Generation >= max(Last_Generation) - 0) %>%
         mutate(
           Pct_Idx = findInterval(
             Mean_Res,

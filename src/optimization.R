@@ -183,7 +183,7 @@ run_one_cell <- function(
   kA <- eq_A*pA/(pA - dA)
   
   kQ <- ifelse(
-    tAQ > 0,
+    tAQ > 0 & tQA > 0,
     eq_Q*(tAQ*pA*eq_A)/(tAQ*pA*eq_A - tQA*dA*eq_Q),
     1
   )
@@ -198,7 +198,7 @@ run_one_cell <- function(
   
   # Simulate ####
   sim_results <- loop_fun(1:nr_sims, function(sim_idx) 
-    return(simulate_HSC_with_sampling(
+    return(simulate_HSC(
       nr_clones,
       pA, dA, tQA, tAQ, pQ,
       kA, kQ,
@@ -213,4 +213,228 @@ run_one_cell <- function(
   
   # Return compared data points ####
   return(get_differences(sim_results, nr_sims, subject))
+}
+
+get_one_cell_actions <- function(
+    optimized_params,
+    nr_sims = 1,
+    sim_parallel = FALSE
+) {
+  # Init simulation parameters ####
+  pars <- base_params
+  for(name in names(optimized_params)) {
+    pars[[name]] <- optimized_params[[name]]
+  }
+  
+  pA <- pars[["pA"]]
+  dA <- pars[["dA"]]
+  tQA <- pars[["tQA"]]
+  tAQ <- pars[["tAQ"]]
+  pQ <- pars[["pQ"]]
+  
+  nr_clones <- ceiling(pars[["clone_mult"]]*1e4)
+  if(nr_clones <= 0) {
+    stop("Nr clones is 0.")
+  }
+  
+  init_A <- 1
+  init_Q <- 0
+  
+  # Set carrying capacity based on equilibrium
+  eq_A <- pars[["space_mult_A"]]*nr_clones
+  eq_Q <- pars[["space_mult_Q"]]*nr_clones
+  
+  if(eq_A <= 0) {
+    stop("Active population on equilibrium is 0")
+  }
+  
+  if(eq_Q <= 0) {
+    stop("Quiescent population on equilibrium is 0")
+  }
+  
+  kA <- eq_A*pA/(pA - dA)
+  
+  kQ <- ifelse(
+    tAQ > 0 & tQA > 0,
+    eq_Q*(tAQ*pA*eq_A)/(tAQ*pA*eq_A - tQA*dA*eq_Q),
+    1
+  )
+  if(kA < 0) {
+    stop("Negative kA")
+  }
+  if(kQ < 0) {
+    stop("Negative kQ")
+  }
+  
+  loop_fun <- ifelse(sim_parallel, parallel::mclapply, lapply)
+  
+  # Simulate ####
+  sim_results <- loop_fun(1:nr_sims, function(sim_idx) 
+    return(get_action_history(
+      nr_clones,
+      pA, dA, tQA, tAQ, pQ,
+      kA, kQ,
+      init_A, init_Q,
+      1000
+    ))
+  )
+  
+  return(sim_results)
+}
+
+run_no_pA <- function(
+    optimized_params,
+    subject = NULL,
+    nr_sims = 1,
+    sim_parallel = FALSE,
+    return_result = FALSE
+) {
+  if(is.null(subject)) {
+    # print("No subject specified. Running both.")
+    
+    return(list(
+      "Z13264" = run_no_pA(
+        optimized_params,
+        "Z13264",
+        nr_sims,
+        sim_parallel,
+        return_result
+      ),
+      "Z14004" = run_no_pA(
+        optimized_params,
+        "Z14004",
+        nr_sims,
+        sim_parallel,
+        return_result
+      )
+    ))
+  } else {
+    # print(paste("Running subject", subject))
+  }
+  
+  # Init simulation parameters ####
+  pars <- base_params
+  for(name in names(optimized_params)) {
+    pars[[name]] <- optimized_params[[name]]
+  }
+  
+  pA <- 0
+  dA <- pars[["dA"]]
+  tQA <- pars[["tQA"]]
+  tAQ <- pars[["tAQ"]]
+  pQ <- pars[["pQ"]]
+  
+  nr_clones <- ceiling(pars[["clone_mult"]]*1e4)
+  if(nr_clones <= 0) {
+    stop("Nr clones is 0.")
+  }
+  
+  init_A <- 1
+  init_Q <- 0
+  
+  # Set carrying capacity based on equilibrium
+  eq_A <- pars[["space_mult_A"]]*nr_clones
+  eq_Q <- pars[["space_mult_Q"]]*nr_clones
+  
+  if(eq_A <= 0) {
+    stop("Active population on equilibrium is 0")
+  }
+  
+  if(eq_Q <= 0) {
+    stop("Quiescent population on equilibrium is 0")
+  }
+  
+  kA <- eq_A*(eq_Q*tQA*pQ)/(eq_Q*tQA*pQ - eq_A*dA)
+  kQ <- eq_Q*pQ*tAQ/(pQ*tAQ - dA)
+  
+  if(kA < 0) {
+    stop("Negative kA")
+  }
+  if(kQ < 0) {
+    stop("Negative kQ")
+  }
+  
+  loop_fun <- ifelse(sim_parallel, parallel::mclapply, lapply)
+  
+  # Simulate ####
+  sim_results <- loop_fun(1:nr_sims, function(sim_idx) 
+    return(simulate_HSC(
+      nr_clones,
+      pA, dA, tQA, tAQ, pQ,
+      kA, kQ,
+      init_A, init_Q,
+      data_tps[[subject]],
+      sample_sizes_vector[[subject]]
+    ))
+  )
+  if(return_result) {
+    return(sim_results)
+  }
+  
+  # Return compared data points ####
+  return(get_differences(sim_results, nr_sims, subject))
+}
+
+get_no_pA_actions <- function(
+    optimized_params,
+    nr_sims = 1,
+    sim_parallel = FALSE
+) {
+  
+  # Init simulation parameters ####
+  pars <- base_params
+  for(name in names(optimized_params)) {
+    pars[[name]] <- optimized_params[[name]]
+  }
+  
+  pA <- 0
+  dA <- pars[["dA"]]
+  tQA <- pars[["tQA"]]
+  tAQ <- pars[["tAQ"]]
+  pQ <- pars[["pQ"]]
+  
+  nr_clones <- ceiling(pars[["clone_mult"]]*1e4)
+  if(nr_clones <= 0) {
+    stop("Nr clones is 0.")
+  }
+  
+  init_A <- 1
+  init_Q <- 0
+  
+  # Set carrying capacity based on equilibrium
+  eq_A <- pars[["space_mult_A"]]*nr_clones
+  eq_Q <- pars[["space_mult_Q"]]*nr_clones
+  
+  if(eq_A <= 0) {
+    stop("Active population on equilibrium is 0")
+  }
+  
+  if(eq_Q <= 0) {
+    stop("Quiescent population on equilibrium is 0")
+  }
+  
+  kA <- eq_A*(eq_Q*tQA*pQ)/(eq_Q*tQA*pQ - eq_A*dA)
+  kQ <- eq_Q*pQ*tAQ/(pQ*tAQ - dA)
+  
+  if(kA < 0) {
+    stop("Negative kA")
+  }
+  if(kQ < 0) {
+    stop("Negative kQ")
+  }
+  
+  loop_fun <- ifelse(sim_parallel, parallel::mclapply, lapply)
+  
+  # Simulate ####
+  sim_results <- loop_fun(1:nr_sims, function(sim_idx) 
+    return(get_action_history(
+      nr_clones,
+      pA, dA, tQA, tAQ, pQ,
+      kA, kQ,
+      init_A, init_Q,
+      1000
+    ))
+  )
+  
+  return(sim_results)
 }

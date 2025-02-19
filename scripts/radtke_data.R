@@ -160,68 +160,6 @@ so_occurence <- extracted_data %>%
   }) %>%
   ungroup()
 
-# Infer clone size data based on future reads ####
-inferred_clone_data <- clone_data %>%
-  group_by(Subject) %>%
-  group_map(function(curr_data, keys) {
-    tps <- sort(unique(curr_data$Time))
-    clones <- unique(curr_data$Bar_Code)
-    
-    infered_data <- matrix(
-      data = 0,
-      nrow = length(clones),
-      ncol = length(tps) + 1,
-      dimnames = list(
-        clones,
-        paste0("t", c(0, tps))
-      )
-    )
-    infered_data[, "t0"] <- 1
-    
-    pb <- progress::progress_bar$new(
-      format = "[:bar :current/:total] (:eta)",
-      total = length(clones)
-    )
-    for(curr_clone in clones) {
-      curr_clone_data <- curr_data %>% filter(Bar_Code == curr_clone)
-      
-      # Get clone appearances over time
-      appearances <- sort(curr_clone_data$Time)
-      
-      last_appearance_idx <- 0
-      last_appearance <- 0
-      last_size <- 1
-      
-      final_appearence <- max(appearances)
-      
-      # For each time point until its final appearance
-      for(tp in tps[which(tps <= final_appearence)]) {
-        
-        # If it appears on that read, use that data
-        if(tp %in% appearances) {
-          last_size <- (curr_clone_data %>% filter(Time == tp))$Clone_Size
-          last_appearance <- tp
-          last_appearance_idx <- last_appearance_idx + 1
-          
-          infered_data[curr_clone, paste0("t", tp)] <- last_size
-        }
-        # Otherwise, complete based on last and next appearance assuming linear growth
-        # TODO: If we decide to fill the data, consider using another growth (?)
-        else {
-          next_appearance <- appearances[last_appearance_idx + 1]
-          next_size <- (curr_clone_data %>% filter(Time == next_appearance))$Clone_Size
-          infered_data[curr_clone, paste0("t", tp)] <- floor(
-            (last_size*(next_appearance - tp) + next_size*(tp - last_appearance))/(next_appearance - last_appearance)
-          )
-        }
-      }
-      pb$tick()
-    }
-    
-    return(infered_data)
-  })
-
-names(inferred_clone_data) <- c("Z13264", "Z14004")
 
 # Other data ####
 data_tps <- list(
@@ -283,7 +221,6 @@ save(
   clone_contribution_dist,
   clones_over_time,
   so_occurence,
-  inferred_clone_data,
   
   data_tps,
   all_data_tps,
@@ -291,4 +228,75 @@ save(
   break_list,
   
   file = "data/derived_radtke.Rda"
+)
+
+# Plots ####
+ggplot(
+  data = clones_over_time,
+  aes(
+    Time, Nr_Clones,
+    color = Subject,
+    group = Subject
+  )
+) +
+  geom_point(shape = "cross", stroke = 1) +
+  geom_line() +
+  labs(
+    y = "Nr. Clones",
+    title = "Clone Diversity"
+  )
+
+ggsave(
+  filename = "img/clone_diversity.png",
+  units = "cm",
+  width = 15,
+  height = 10
+)
+
+ggplot(
+  data = so_occurence %>%
+    filter(Total_Cells > 1000),
+  aes(
+    Time, SO_Clone_Contribution,
+    color = Subject,
+    group = Subject
+  )
+) +
+  geom_point(shape = "cross", stroke = 1) +
+  geom_line() +
+  labs(
+    y = "Fraction of SO Clones",
+    title = "SO Clones"
+  )
+
+ggsave(
+  filename = "img/so_occurrence.png",
+  units = "cm",
+  width = 15,
+  height = 10
+)
+
+ggplot(
+  data = clone_contribution_dist %>%
+    filter(Time %in% c(362,397,462,495)),
+  aes(
+    Clone_Contribution, Frequency,
+    color = Subject,
+    group = Subject
+  )
+) +
+  geom_point(shape = "cross", stroke = 1) +
+  geom_line() +
+  facet_wrap(vars(Time)) +
+  scale_y_log10() + scale_x_log10() +
+  labs(
+    y = "Fraction of SO Clones",
+    title = "Clone Contribution"
+  )
+
+ggsave(
+  filename = "img/clone_contribution.png",
+  units = "cm",
+  width = 25,
+  height = 15
 )

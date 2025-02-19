@@ -2,6 +2,7 @@ library(ggplot2)
 library(tidyverse)
 
 source("src/Simplified_HSC_Model.R")
+source("src/utils.R")
 
 load("data/extracted_radtke.Rda")
 load("data/derived_radtke.Rda")
@@ -48,6 +49,7 @@ plt_cell_types <- ggplot(
     fill = "Cell Type"
   )
 
+plt_cell_types
 ggsave(
   filename = "img/cell_types.pdf",
   plot = plt_cell_types,
@@ -58,7 +60,6 @@ ggsave(
 )
 
 # Sample Counts ####
-
 plt_observed_data <- ggplot(
   clone_data %>% 
     group_by(Subject, Time) %>%
@@ -84,6 +85,7 @@ plt_observed_data <- ggplot(
     y = "# of Cells/Clones"
   )
 
+plt_observed_data
 ggsave(
   filename = "img/plt_data.pdf",
   plot = plt_observed_data,
@@ -122,59 +124,7 @@ ggsave(
   units = "cm"
 )
 
-# Diversity (One Compartment Fit) ####
-nr_clones <- 1.2e5
-div_rate <- 0.15
-one_comp_sim <- simulate_HSC_simplified(
-  nr_clones = nr_clones,
-  pA = pA, dA = dA,
-  tQA = 0, tAQ = 0,
-  pQ = 0,
-  kA = nr_clones*pA/(pA - dA), kQ = 1,
-  init_A = 1, init_Q = 0,
-  tps = all_data_tps
-)
-
-one_comp_div <- get_diversity_df(one_comp_sim$Active)
-plt_one_comp_div <- ggplot(
-  clones_over_time,
-  aes(
-    x = Time,
-    y = Nr_Clones,
-    color = Subject,
-    group = Subject
-  )
-) +
-  geom_line(
-    # data = one_comp_sample_div,
-    data = one_comp_div,
-    mapping = aes(
-      color = NULL,
-      group = NULL
-    ),
-    linetype = "solid"
-  ) +
-  geom_line(linetype = "dashed") +
-  geom_point(shape = "cross") +
-  labs(
-    x = "Time",
-    y = "Nr. Clones",
-    title = "Clone Diversity Fit",
-    color = "Legend"
-  ) +
-  ylim(0, 35000)
-
-plt_one_comp_div
-ggsave(
-  filename = "img/plt_one_comp_div.pdf", 
-  plot = plt_one_comp_div, 
-  device = "pdf",
-  width = 15,
-  height = 10,
-  units = "cm"
-)
-
-# Contribution ####
+# Contribution (data) ####
 plt_contribution <- ggplot(
   clone_contribution_dist %>% filter(
     Time %in% c(
@@ -208,34 +158,94 @@ ggsave(
   width = 25,
   height = 15,
   units = "cm"
+))()
+
+# SO Clones ####
+plt_so <- ggplot(
+  so_occurence %>%
+    filter(Total_Cells > 1000),
+  aes(
+    x = Time,
+    y = SO_Clone_Contribution,
+    color = Subject,
+    group = Subject
+  )
+) +
+  geom_line() +
+  geom_point(shape = "cross") +
+  labs(
+    x = "Time",
+    y = "SO Clone Contribution",
+    title = "Single Occurring Clones",
+    color = "Legend"
+  )
+
+plt_so
+ggsave(
+  filename = "img/plt_so.pdf", 
+  plot = plt_so, 
+  device = "pdf",
+  width = 15,
+  height = 10,
+  units = "cm"
 )
 
-# Contribution (One compartment fit) ####
+# Diversity (One Compartment Fit) ####
 nr_clones <- 17e4
 pA = 0.7535011
 dA = 0.1
-one_comp_sim_Z13264 <- simulate_HSC_simplified(
+one_comp_sim <- simulate_HSC(
   nr_clones = nr_clones,
   pA = pA, dA = dA,
   tQA = 0, tAQ = 0,
   pQ = 0,
   kA = nr_clones*pA/(pA - dA), kQ = 1,
   init_A = 1, init_Q = 0,
-  tps = data_tps$Z13264
-)
-one_comp_sim_Z14004 <- simulate_HSC_simplified(
-  nr_clones = nr_clones,
-  pA = pA, dA = dA,
-  tQA = 0, tAQ = 0,
-  pQ = 0,
-  kA = nr_clones*pA/(pA - dA), kQ = 1,
-  init_A = 1, init_Q = 0,
-  tps = data_tps$Z14004
+  tps = all_data_tps
 )
 
+one_comp_div <- get_diversity_df(one_comp_sim)
+plt_one_comp_div <- ggplot(
+  clones_over_time,
+  aes(
+    x = Time,
+    y = Nr_Clones,
+    color = Subject,
+    group = Subject
+  )
+) +
+  geom_line(
+    data = one_comp_div,
+    mapping = aes(
+      color = NULL,
+      group = NULL
+    ),
+    linetype = "solid"
+  ) +
+  geom_line(linetype = "dashed") +
+  geom_point(shape = "cross") +
+  labs(
+    x = "Time",
+    y = "Nr. Clones",
+    title = "Clone Diversity Fit",
+    color = "Legend"
+  ) +
+  ylim(0, 35000)
+
+plt_one_comp_div
+ggsave(
+  filename = "img/plt_one_comp_div.pdf", 
+  plot = plt_one_comp_div, 
+  device = "pdf",
+  width = 15,
+  height = 10,
+  units = "cm"
+)
+
+# Contribution (One compartment fit) ####
 one_comp_cont <- bind_rows(
-  Z13264 = get_contribution_dist_df(one_comp_sim_Z13264$Active),
-  Z14004 = get_contribution_dist_df(one_comp_sim_Z14004$Active),
+  Z13264 = get_contribution_dist_df(one_comp_sim[, c("t397", "t462")]),
+  Z14004 = get_contribution_dist_df(one_comp_sim[, c("t362", "t495")]),
   .id = "Subject"
 )
 
@@ -254,12 +264,7 @@ plt_one_comp_cont <- ggplot(
   )
 ) +
   geom_line(
-    data = one_comp_cont %>% filter(
-      Time %in% c(
-        362, 397,
-        462, 495
-      )
-    ),
+    data = one_comp_cont,
     mapping = aes(color = NULL)
   ) +
   geom_line(linetype = "dashed") +
@@ -284,31 +289,10 @@ ggsave(
 )
 
 # Sample Effect on contribution ####
-nr_clones <- 17e4
-pA = 0.7535011
-dA = 0.1
-no_sample_sim <- simulate_HSC_simplified(
-  nr_clones = nr_clones,
-  pA = pA, dA = dA,
-  tQA = 0, tAQ = 0,
-  pQ = 0,
-  kA = nr_clones*pA/(pA - dA), kQ = 1,
-  init_A = 1, init_Q = 0,
-  tps = data_tps$Z13264
-)
-
-sample_effect_df <- get_contribution_dist_df(sample_sim_data(
-  cbind(
-    "t10" = no_sample_sim$Active[, "t397"],
-    "t25" = no_sample_sim$Active[, "t397"],
-    "t100" = no_sample_sim$Active[, "t397"]
-  ),
-  c(10, 25, 100),
-  c(
-    "t10" = 0.10,
-    "t25" = 0.25,
-    "t100" = 1
-  )*length(no_sample_sim$Active[, "t397"])
+sample_effect_df <- get_contribution_dist_df(cbind(
+  "t10" = sample_population(one_comp_sim[, "t397"], floor(sum(one_comp_sim[, "t397"])*0.1)),
+  "t25" = sample_population(one_comp_sim[, "t397"], floor(sum(one_comp_sim[, "t397"])*0.25)),
+  "t100" = one_comp_sim[, "t397"]
 ))
 
 plt_sample_effect <- ggplot(
@@ -348,7 +332,7 @@ ggsave(
 nr_clones <- floor(16.07755e4)
 pA = 0.7535011
 dA = 0.1328183
-one_comp_sample_sim_Z13264 <- simulate_HSC_with_sampling(
+one_comp_sample_sim_Z13264 <- simulate_HSC(
   nr_clones = nr_clones,
   pA = pA, dA = dA,
   tQA = 0, tAQ = 0,
@@ -359,8 +343,7 @@ one_comp_sample_sim_Z13264 <- simulate_HSC_with_sampling(
   sample_sizes = sample_sizes_vector$Z13264
 )
 
-# nr_clones <- 20e4
-one_comp_sample_sim_Z14004 <- simulate_HSC_with_sampling(
+one_comp_sample_sim_Z14004 <- simulate_HSC(
   nr_clones = nr_clones,
   pA = pA, dA = dA,
   tQA = 0, tAQ = 0,
@@ -502,36 +485,6 @@ ggsave(
   plot = plt_one_comp_sample_so, 
   device = "pdf",
   width = 20,
-  height = 10,
-  units = "cm"
-)
-
-# SO Clones ####
-plt_so <- ggplot(
-  so_occurence %>%
-    filter(Total_Cells > 1000),
-  aes(
-    x = Time,
-    y = SO_Clone_Contribution,
-    color = Subject,
-    group = Subject
-  )
-) +
-  geom_line() +
-  geom_point(shape = "cross") +
-  labs(
-    x = "Time",
-    y = "SO Clone Contribution",
-    title = "Single Occurring Clones",
-    color = "Legend"
-  )
-
-plt_so
-ggsave(
-  filename = "img/plt_so.pdf", 
-  plot = plt_so, 
-  device = "pdf",
-  width = 15,
   height = 10,
   units = "cm"
 )

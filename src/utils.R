@@ -163,3 +163,21 @@ get_full_diffs_df <- function(sim_diffs) {
   
   return(df)
 }
+
+sample_population <- function(population, sample_size) {
+  nr_clones <- length(population)
+  clone_names <- names(population)
+  total_cells <- sum(population)
+  
+  tmp <- table(sample(
+    rep(clone_names, population),
+    min(sample_size, total_cells),
+    replace = FALSE
+  ))
+  
+  sampled_pop <- rep(0, nr_clones)
+  names(sampled_pop) <- clone_names
+  sampled_pop[names(tmp)] <- tmp
+  
+  return(sampled_pop)
+}
