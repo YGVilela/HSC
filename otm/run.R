@@ -2,13 +2,13 @@
 
 ## Def ####
 base_path <- "data"
-out_one <- file.path(base_path, "one")
-out_two <- file.path(base_path, "two")
-out_unified <- file.path(base_path, "unified")
-generationSize <- 2
-generations <- 1
-nr_sims <- 1
-cores <- 1
+out_one <- file.path(base_path, "one_new")
+out_two <- file.path(base_path, "two_new")
+out_unified <- file.path(base_path, "unified_new")
+generationSize <- 1000
+generations <- 25
+nr_sims <- 10
+cores <- 100
 
 ## Checks ####
 if(cores > parallel::detectCores()) {
@@ -32,8 +32,8 @@ if(length(new.packages)) install.packages(new.packages)
 library(dplyr)
 library(GA)
 
-# Data ####
-load("weights.Rda")
+# Data #### 
+load("new_weights.Rda")
 load("radtke_data.Rda")
 
 # Simulation function ####
@@ -296,7 +296,7 @@ evaluate_res <- function(sim_results, animal_id) {
       all = FALSE,
       suffixes = c("_Sim", "_Data")
     ) %>%
-    filter(Time > 365) %>%
+    filter(Time > 360) %>%
     mutate(
       Res = log10(coalesce(Nr_Clones_Sim, 0) + eps) - log10(coalesce(Nr_Clones_Data, 0) + eps)
     ) %>%
@@ -354,7 +354,7 @@ evaluate_res <- function(sim_results, animal_id) {
       all = FALSE,
       suffixes = c("_Sim", "_Data")
     ) %>%
-    filter(Time > 365 & Total_Cells_Data > 1e2) %>%
+    filter(Time > 360 & Total_Cells_Data > 1e2) %>%
     mutate(
       Res =
         log10(coalesce(SO_Clone_Contribution_Sim, 0) + eps) -
@@ -376,15 +376,15 @@ evaluate_metric <- function(full_res) {
   # Merge residuals with weights df
   merge(full_res, weight_df) %>%
     # Normalize residual with graph weight
-    mutate(Normalized_Res = Res*Weight_Graph) %>%
-    # Evaluate mean distance (L1-norm) for each graph in each simulation
+    mutate(Normalized_Res = Res*Graph_Weight) %>%
+    # Evaluate mean distance (Squared distance) for each graph in each simulation
     group_by(Animal_Id, Graph, Sim_Idx) %>%
-    summarise(Mean_L1 = mean(abs(Normalized_Res)), .groups = "drop") %>%
+    summarise(RSM = mean(Normalized_Res**2), .groups = "drop") %>%
     # Evaluate mean distance for each graph across simulations
     group_by(Animal_Id, Graph) %>%
-    summarise(Mean_L1 = mean(Mean_L1), .groups = "drop") %>%
+    summarise(RSM = mean(RSM), .groups = "drop") %>%
     # Sum the distance of all graph
-    select(Mean_L1) %>%
+    select(RSM) %>%
     sum() %>%
     return()
 }
@@ -393,7 +393,7 @@ obj_func <- function(otm_pars, par_names, nr_sims) {
   names(otm_pars) <- par_names
   simulation_pars <- transform_pars(otm_pars)
   
-  res_df_new <- lapply(1:nr_sims, function(sim_idx) {
+  res_df <- lapply(1:nr_sims, function(sim_idx) {
     animal_id_list <- c("Z14004", "Z13264")
     
     residual_list <- lapply(animal_id_list, function(animal_id)
@@ -413,7 +413,7 @@ obj_func <- function(otm_pars, par_names, nr_sims) {
     )
   }) %>% bind_rows()
   
-  obj_value <- evaluate_metric(bind_rows(res_df_new))
+  obj_value <- evaluate_metric(res_df)
   
   return(obj_value)
 }
@@ -476,22 +476,6 @@ run_ga <- function(
 }
 
 # Run! ####
-## One Compartment ####
-bounds_one <- list(
-  "names" = c("pA", "dA", "clone_mult", "space_mult_A"),
-  "lower" = c(0.4,  0.025,  12,  1),
-  "upper" = c(0.9, 0.15, 50, 5)
-)
-
-run_ga(
-  bounds = bounds_one,
-  base_iter_path = file.path(out_one, "iter_"),
-  final_path = file.path(out_one, "final.Rda"),
-  generationSize = generationSize,
-  generations = generations,
-  nr_sims = nr_sims,
-  cores = cores
-)
 
 ## Two Compartments ####
 bounds_two <- list(
@@ -521,6 +505,23 @@ run_ga(
   bounds = bounds_unified,
   base_iter_path = file.path(out_unified, "iter_"),
   final_path = file.path(out_unified, "final.Rda"),
+  generationSize = generationSize,
+  generations = generations,
+  nr_sims = nr_sims,
+  cores = cores
+)
+
+## One Compartment ####
+bounds_one <- list(
+  "names" = c("pA", "dA", "clone_mult", "space_mult_A"),
+  "lower" = c(0.4,  0.025,  12,  1),
+  "upper" = c(0.9, 0.15, 50, 5)
+)
+
+run_ga(
+  bounds = bounds_one,
+  base_iter_path = file.path(out_one, "iter_"),
+  final_path = file.path(out_one, "final.Rda"),
   generationSize = generationSize,
   generations = generations,
   nr_sims = nr_sims,
