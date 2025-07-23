@@ -2,9 +2,9 @@
 
 ## Def ####
 base_path <- "data"
-out_one <- file.path(base_path, "one_new")
-out_two <- file.path(base_path, "two_new")
-out_unified <- file.path(base_path, "unified_new")
+out_one <- file.path(base_path, "one_resume")
+out_two <- file.path(base_path, "two_resume")
+out_unified <- file.path(base_path, "unified_resume")
 generationSize <- 1000
 generations <- 25
 nr_sims <- 10
@@ -329,8 +329,7 @@ evaluate_res <- function(sim_results, animal_id) {
       suffixes = c("_Sim", "_Data")
     ) %>%
     filter(
-      Clone_Contribution <= 1e-3 &
-      Time %in% compared_tps
+      Clone_Contribution <= 1e-3 & Time %in% compared_tps
     ) %>%
     mutate(
       Res = log10(coalesce(Frequency_Sim, 0) + eps) -  log10(coalesce(Frequency_Data, 0) + eps)
@@ -408,8 +407,7 @@ obj_func <- function(otm_pars, par_names, nr_sims) {
     )
     
     return(
-      bind_rows(residual_list) %>%
-      mutate(Sim_Idx = sim_idx)
+      bind_rows(residual_list) %>% mutate(Sim_Idx = sim_idx)
     )
   }) %>% bind_rows()
   
@@ -440,9 +438,9 @@ run_ga <- function(
     generationSize,
     generations,
     nr_sims,
-    cores = 2
-  ) {
-  
+    cores = 2,
+    initial_population = NULL
+) {
   start_time <- Sys.time()
   ga_res <- ga(
     type = "real-valued",
@@ -459,11 +457,12 @@ run_ga <- function(
     upper = bounds$upper,
     popSize = generationSize,
     maxiter = generations,
-    run = 10,
+    run = 15,
     parallel = cores,
     postFitness = function(obj, ...) postfit(obj, base_iter_path),
     monitor = TRUE,
-    keepBest = TRUE
+    keepBest = TRUE,
+    suggestions = initial_population
   )
   end_time <- Sys.time()
   print(end_time - start_time)
@@ -477,7 +476,21 @@ run_ga <- function(
 
 # Run! ####
 
+load_initial_pop <- function(final_file, generationSize) {
+  load(final_file)
+  
+  if(generationSize >= ga_res@popSize) {
+    return(ga_res@population)
+  } else {
+    best_idx <- tail(sort(ga_res@fitness, index.return = TRUE)$ix, n = generationSize)
+    return(ga_res@population[best_idx, ])
+  }
+  
+}
+
 ## Two Compartments ####
+initial_pop_two <- load_initial_pop("data/final_two.Rda", generationSize)
+
 bounds_two <- list(
   "names" = c("pA", "dA", "tQA", "tAQ", "clone_mult", "space_mult_A", "space_mult_Q"),
   "lower" = c(0.4,  0.025,  0.0001,  0.01,  3,  1,  1),
@@ -491,10 +504,13 @@ run_ga(
   generationSize = generationSize,
   generations = generations,
   nr_sims = nr_sims,
-  cores = cores
+  cores = cores,
+  initial_population = initial_pop_two
 )
 
 ## Unified ####
+initial_pop_unified <- load_initial_pop("data/final_unified.Rda", generationSize)
+
 bounds_unified <- list(
   "names" = c("pA", "dA", "tQA", "tAQ", "clone_mult", "space_mult_A", "space_mult_Q", "pQ"),
   "lower" = c(0.4,  0.025,  0.0001,  0.01,  3,  1,  1, -0.05),
@@ -508,10 +524,13 @@ run_ga(
   generationSize = generationSize,
   generations = generations,
   nr_sims = nr_sims,
-  cores = cores
+  cores = cores,
+  initial_population = initial_pop_unified
 )
 
 ## One Compartment ####
+initial_pop_one <- load_initial_pop("data/final_one.Rda", generationSize)
+
 bounds_one <- list(
   "names" = c("pA", "dA", "clone_mult", "space_mult_A"),
   "lower" = c(0.4,  0.025,  12,  1),
@@ -525,5 +544,6 @@ run_ga(
   generationSize = generationSize,
   generations = generations,
   nr_sims = nr_sims,
-  cores = cores
+  cores = cores,
+  initial_population = initial_pop_one
 )
