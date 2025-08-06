@@ -2,11 +2,11 @@
 
 ## Def ####
 base_path <- "data"
-out_one <- file.path(base_path, "one_no_SO")
-out_two <- file.path(base_path, "two_resume_2")
-out_unified <- file.path(base_path, "unified_resume_2")
+out_one <- file.path(base_path, "one_dw_SO")
+# out_two <- file.path(base_path, "two_resume_2")
+# out_unified <- file.path(base_path, "unified_resume_2")
 generationSize <- 1000
-generations <- 25
+generations <- 50
 nr_sims <- 10
 cores <- 100
 
@@ -20,8 +20,8 @@ if(cores > parallel::detectCores()) {
 }
 
 dir.create(out_one, recursive = TRUE, showWarnings = FALSE)
-dir.create(out_two, recursive = TRUE, showWarnings = FALSE)
-dir.create(out_unified, recursive = TRUE, showWarnings = FALSE)
+# dir.create(out_two, recursive = TRUE, showWarnings = FALSE)
+# dir.create(out_unified, recursive = TRUE, showWarnings = FALSE)
 
 
 # External libraries ####
@@ -490,48 +490,48 @@ load_initial_pop <- function(final_file, generationSize) {
 }
 
 ## Two Compartments ####
-initial_pop_two <- load_initial_pop("data/final_two_2.Rda", generationSize)
-
-bounds_two <- list(
-  "names" = c("pA", "dA", "tQA", "tAQ", "clone_mult", "space_mult_A", "space_mult_Q"),
-  "lower" = c(0.4,  0.025,  0.0001,  0.01,  3,  1,  1),
-  "upper" = c(0.9, 0.15, 0.03, 0.075, 12, 5, 5)
-)
-
-run_ga(
-  bounds = bounds_two,
-  base_iter_path = file.path(out_two, "iter_"),
-  final_path = file.path(out_two, "final.Rda"),
-  generationSize = generationSize,
-  generations = generations,
-  nr_sims = nr_sims,
-  cores = cores,
-  initial_population = initial_pop_two
-)
+# initial_pop_two <- load_initial_pop("data/final_two_2.Rda", generationSize)
+# 
+# bounds_two <- list(
+#   "names" = c("pA", "dA", "tQA", "tAQ", "clone_mult", "space_mult_A", "space_mult_Q"),
+#   "lower" = c(0.4,  0.025,  0.0001,  0.01,  3,  1,  1),
+#   "upper" = c(0.9, 0.15, 0.03, 0.075, 12, 5, 5)
+# )
+# 
+# run_ga(
+#   bounds = bounds_two,
+#   base_iter_path = file.path(out_two, "iter_"),
+#   final_path = file.path(out_two, "final.Rda"),
+#   generationSize = generationSize,
+#   generations = generations,
+#   nr_sims = nr_sims,
+#   cores = cores,
+#   initial_population = initial_pop_two
+# )
 
 ## Unified ####
-initial_pop_unified <- load_initial_pop("data/final_unified_2.Rda", generationSize)
-
-bounds_unified <- list(
-  "names" = c("pA", "dA", "tQA", "tAQ", "clone_mult", "space_mult_A", "space_mult_Q", "pQ"),
-  "lower" = c(0.4,  0.025,  0.0001,  0.01,  3,  1,  1, -0.05),
-  "upper" = c(0.9, 0.15, 0.03, 0.075, 12, 5, 5, 1)
-)
-
-run_ga(
-  bounds = bounds_unified,
-  base_iter_path = file.path(out_unified, "iter_"),
-  final_path = file.path(out_unified, "final.Rda"),
-  generationSize = generationSize,
-  generations = generations,
-  nr_sims = nr_sims,
-  cores = cores,
-  initial_population = initial_pop_unified
-)
+# initial_pop_unified <- load_initial_pop("data/final_unified_2.Rda", generationSize)
+# 
+# bounds_unified <- list(
+#   "names" = c("pA", "dA", "tQA", "tAQ", "clone_mult", "space_mult_A", "space_mult_Q", "pQ"),
+#   "lower" = c(0.4,  0.025,  0.0001,  0.01,  3,  1,  1, -0.05),
+#   "upper" = c(0.9, 0.15, 0.03, 0.075, 12, 5, 5, 1)
+# )
+# 
+# run_ga(
+#   bounds = bounds_unified,
+#   base_iter_path = file.path(out_unified, "iter_"),
+#   final_path = file.path(out_unified, "final.Rda"),
+#   generationSize = generationSize,
+#   generations = generations,
+#   nr_sims = nr_sims,
+#   cores = cores,
+#   initial_population = initial_pop_unified
+# )
 
 ## One Compartment ####
-## Optimization without SO ####
-evaluate_metric_no_SO <- function(full_res) {
+## Optimization with down-weighted SO ####
+evaluate_metric_dw_SO <- function(full_res, SO_Weight) {
   # Merge residuals with weights df
   merge(full_res, weight_df) %>%
     # Normalize residual with graph weight
@@ -542,14 +542,15 @@ evaluate_metric_no_SO <- function(full_res) {
     # Evaluate mean distance for each graph across simulations
     group_by(Animal_Id, Graph) %>%
     summarise(RSM = mean(RSM), .groups = "drop") %>%
-    # Sum the distance of all graph EXCEPT for SO 
-    filter(Graph != "SO") %>%
+    # Down weight SO
+    mutate(RSM = ifelse(Graph == "SO", RSM*SO_Weight, RSM)) %>%
+    # Sum the distance of all graphs 
     select(RSM) %>%
     sum() %>%
     return()
 }
 
-obj_func_no_SO <- function(otm_pars, par_names, nr_sims) {
+obj_func_dw_SO <- function(otm_pars, par_names, nr_sims, SO_Weight) {
   names(otm_pars) <- par_names
   simulation_pars <- transform_pars(otm_pars)
   
@@ -572,12 +573,12 @@ obj_func_no_SO <- function(otm_pars, par_names, nr_sims) {
     )
   }) %>% bind_rows()
   
-  obj_value <- evaluate_metric_no_SO(res_df)
+  obj_value <- evaluate_metric_dw_SO(res_df, SO_Weight)
   
   return(obj_value)
 }
 
-run_ga_no_SO <- function(
+run_ga_dw_SO <- function(
     bounds,
     base_iter_path,
     final_path,
@@ -585,13 +586,14 @@ run_ga_no_SO <- function(
     generations,
     nr_sims,
     cores = 2,
-    initial_population = NULL
+    initial_population = NULL,
+    SO_Weight = 1
 ) {
   start_time <- Sys.time()
   ga_res <- ga(
     type = "real-valued",
     fitness = function(x) tryCatch(
-      -obj_func_no_SO(x, bounds$names, nr_sims),
+      -obj_func_dw_SO(x, bounds$names, nr_sims, SO_Weight),
       error = function(e) {
         print(conditionMessage(e))
         
@@ -603,7 +605,7 @@ run_ga_no_SO <- function(
     upper = bounds$upper,
     popSize = generationSize,
     maxiter = generations,
-    run = 10,
+    run = 15,
     parallel = cores,
     postFitness = function(obj, ...) postfit(obj, base_iter_path),
     monitor = TRUE,
@@ -630,7 +632,7 @@ bounds_one <- list(
   "upper" = c(0.9, 0.15, 50, 5)
 )
 
-run_ga_no_SO(
+run_ga_dw_SO(
   bounds = bounds_one,
   base_iter_path = file.path(out_one, "iter_"),
   final_path = file.path(out_one, "final.Rda"),
@@ -638,5 +640,6 @@ run_ga_no_SO(
   generations = generations,
   nr_sims = nr_sims,
   cores = cores,
-  initial_population = initial_pop_one
+  initial_population = initial_pop_one,
+  SO_Weight = 0.05
 )
