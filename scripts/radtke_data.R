@@ -161,6 +161,33 @@ so_occurence <- extracted_data %>%
   ungroup()
 
 
+# Cell Types ####
+get_cell_group <- function(cell_type) {
+  group_names <- c(
+    "Bcell",
+    "Gran",
+    "Lymph",
+    "Mono",
+    "NKcell",
+    "Tcell",
+    "WBC",
+    "CD34+"
+  )
+  
+  cell_groups <- rep("Other", length(cell_type))
+  
+  for(name in group_names) {
+    cell_groups[which(grepl(name, cell_type))] <- name
+  }
+  
+  return(cell_groups)
+}
+
+cell_by_group <- extracted_data %>%
+  mutate(Cell_Group = get_cell_group(Cell_Type)) %>%
+  group_by(Subject, Time, Cell_Group) %>%
+  summarise(Count = sum(Count), .groups = "drop")
+
 # Other data ####
 data_tps <- list(
   "Z13264" = (clones_over_time %>% filter(Subject == "Z13264"))$Time,
@@ -194,8 +221,9 @@ break_list <- list(
       filter(Subject == "Z13264" & Time == tp)
     
     hist_data <- hist(log10(curr_data$Clone_Size/curr_data$Cell_Count), plot = FALSE)
+    non_zero <- which(hist_data$counts > 0)
     
-    return(c(-Inf, hist_data$breaks, 0))
+    return(c(-Inf, hist_data$breaks[non_zero], 0))
   }),
   
   "Z14004" = lapply(data_tps[["Z14004"]], function(tp) {
@@ -203,8 +231,9 @@ break_list <- list(
       filter(Subject == "Z14004" & Time == tp)
     
     hist_data <- hist(log10(curr_data$Clone_Size/curr_data$Cell_Count), plot = FALSE)
+    non_zero <- which(hist_data$counts > 0)
     
-    return(c(-Inf, hist_data$breaks, 0))
+    return(c(-Inf, hist_data$breaks[non_zero], 0))
   })
 )
 
@@ -221,6 +250,8 @@ save(
   clone_contribution_dist,
   clones_over_time,
   so_occurence,
+  
+  cell_by_group,
   
   data_tps,
   all_data_tps,

@@ -43,7 +43,7 @@ get_diversity_df <- function(sim_data, tps = NULL) {
   ))
 }
 
-get_contribution_dist_df <- function(sim_data, tps = NULL, break_list = NULL) {
+get_contribution_dist_df <- function(sim_data, tps = NULL, break_list = NULL, keep_all = FALSE) {
   if(is.null(tps)) {
     tps <- as.integer(substring(colnames(sim_data), 2))
   }
@@ -65,14 +65,17 @@ get_contribution_dist_df <- function(sim_data, tps = NULL, break_list = NULL) {
       plot = FALSE,
       breaks = break_list[[paste0("t", tp)]]
     )
-    non_zero <- which(hist_data$counts > 0)
+    kept_rows <- which(hist_data$breaks > -Inf & hist_data$breaks < 0)
+    if(!keep_all) {
+      kept_rows <-  which(hist_data$counts > 0)
+    }
     
     return(data.frame(
       Time = tp,
       Engrafment_Phase = engrafment_phase(tp),
       
-      Clone_Contribution = 10**hist_data$breaks[non_zero],
-      Frequency = hist_data$counts[non_zero]/length(existing_clones)
+      Clone_Contribution = 10**hist_data$breaks[kept_rows],
+      Frequency = hist_data$counts[kept_rows]/length(existing_clones)
     ))
   }))))
 }
@@ -180,4 +183,71 @@ sample_population <- function(population, sample_size) {
   sampled_pop[names(tmp)] <- tmp
   
   return(sampled_pop)
+}
+
+transform_pars <- function(otm_pars) {
+  base_params = c(
+    tQA = 0,
+    tAQ = 0,
+    pQ = 0,
+    space_mult_Q = 1
+  )
+  
+  aux_pars <- base_params
+  for(name in names(otm_pars)) {
+    aux_pars[[name]] <- otm_pars[[name]]
+  }
+  
+  pA <- aux_pars[["pA"]]
+  dA <- aux_pars[["dA"]]
+  tQA <- aux_pars[["tQA"]]
+  tAQ <- aux_pars[["tAQ"]]
+  pQ <- aux_pars[["pQ"]]
+  
+  nr_clones <- ceiling(aux_pars[["clone_mult"]]*1e4)
+  if(nr_clones <= 0) {
+    stop("Nr clones is 0.")
+  }
+  
+  init_A <- 1
+  init_Q <- 0
+  
+  # Set carrying capacity based on equilibrium
+  eq_A <- aux_pars[["space_mult_A"]]*nr_clones
+  eq_Q <- aux_pars[["space_mult_Q"]]*nr_clones
+  
+  if(eq_A <= 0) {
+    stop("Active population on equilibrium is 0")
+  }
+  
+  if(eq_Q <= 0) {
+    stop("Quiescent population on equilibrium is 0")
+  }
+  
+  kA <- eq_A*pA/(pA - dA)
+  
+  kQ <- ifelse(
+    tAQ > 0 & tQA > 0,
+    eq_Q*(tAQ*pA*eq_A)/(tAQ*pA*eq_A - tQA*dA*eq_Q),
+    1
+  )
+  if(kA < 0) {
+    stop("Negative kA")
+  }
+  if(kQ < 0) {
+    stop("Negative kQ")
+  }
+  
+  return(list(
+    nr_clones = nr_clones,
+    
+    pA = pA,
+    dA = dA,
+    tAQ = tAQ,
+    tQA = tQA,
+    pQ = pQ,
+    
+    kA = kA,
+    kQ = kQ
+  ))
 }
