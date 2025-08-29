@@ -29,7 +29,7 @@ get_differences <- function(sim_results, nr_sims, subject) {
       all = FALSE,
       suffixes = c("_Sim", "_Data")
     ) %>%
-    filter(Time > 365) %>%
+    filter(Time > 360) %>%
     mutate(
       Res = log10(Nr_Clones_Sim) - log10(Nr_Clones_Data)
     ) %>%
@@ -95,7 +95,7 @@ get_differences <- function(sim_results, nr_sims, subject) {
       all = FALSE,
       suffixes = c("_Sim", "_Data")
     ) %>%
-    filter(Time > 365 & Total_Cells > 1e3) %>%
+    filter(Time > 360 & Total_Cells > 1e2) %>%
     mutate(
       # Before taking the log, change 0 to 1 so when log10 its applied it becomes 0
       Res =
@@ -218,7 +218,8 @@ run_one_cell <- function(
 get_one_cell_actions <- function(
     optimized_params,
     nr_sims = 1,
-    sim_parallel = FALSE
+    sim_parallel = FALSE,
+    max_time = 1000
 ) {
   # Init simulation parameters ####
   pars <- base_params
@@ -275,7 +276,7 @@ get_one_cell_actions <- function(
       pA, dA, tQA, tAQ, pQ,
       kA, kQ,
       init_A, init_Q,
-      1000
+      max_time
     ))
   )
   
