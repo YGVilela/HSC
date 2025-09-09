@@ -22,8 +22,8 @@ if(cores > parallel::detectCores()) {
 
 dir.create(out_one, recursive = TRUE, showWarnings = FALSE)
 dir.create(out_one_dw_SO, recursive = TRUE, showWarnings = FALSE)
-dir.create(out_two, recursive = TRUE, showWarnings = FALSE)
-dir.create(out_unified, recursive = TRUE, showWarnings = FALSE)
+# dir.create(out_two, recursive = TRUE, showWarnings = FALSE)
+# dir.create(out_unified, recursive = TRUE, showWarnings = FALSE)
 
 
 # External libraries ####
