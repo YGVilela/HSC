@@ -4,8 +4,8 @@
 base_path <- "no_cc_data"
 out_one <- file.path(base_path, "one")
 out_one_dw_SO <- file.path(base_path, "one_dw_SO")
-out_two <- file.path(base_path, "two")
-out_unified <- file.path(base_path, "unified")
+# out_two <- file.path(base_path, "two")
+# out_unified <- file.path(base_path, "unified")
 generationSize <- 1000
 generations <- 50
 nr_sims <- 10
@@ -461,44 +461,44 @@ run_ga <- function(
 }
 
 # Run! ####
-bounds_two <- list(
-  "names" = c("pA", "dA", "tQA", "tAQ", "clone_mult"),
-  "lower" = c(0.4,  0.025,  0.0001,  0.01,  3),
-  "upper" = c(0.9, 0.15, 0.03, 0.075, 12)
-)
-
-run_ga(
-  bounds = bounds_two,
-  base_iter_path = file.path(out_two, "iter_"),
-  final_path = file.path(out_two, "final.Rda"),
-  generationSize = generationSize,
-  generations = generations,
-  nr_sims = nr_sims,
-  cores = cores
-)
+# bounds_two <- list(
+#   "names" = c("pA", "dA", "tQA", "tAQ", "clone_mult"),
+#   "lower" = c(0.4,  0.025,  0.0001,  0.01,  3),
+#   "upper" = c(0.9, 0.15, 0.03, 0.075, 12)
+# )
+# 
+# run_ga(
+#   bounds = bounds_two,
+#   base_iter_path = file.path(out_two, "iter_"),
+#   final_path = file.path(out_two, "final.Rda"),
+#   generationSize = generationSize,
+#   generations = generations,
+#   nr_sims = nr_sims,
+#   cores = cores
+# )
 
 ## Unified #### 
-bounds_unified <- list(
-  "names" = c("pA", "dA", "tQA", "tAQ", "clone_mult", "pQ"),
-  "lower" = c(0.4,  0.025,  0.0001,  0.01,  3, -0.05),
-  "upper" = c(0.9, 0.15, 0.03, 0.075, 12, 1)
-)
-
-run_ga(
-  bounds = bounds_unified,
-  base_iter_path = file.path(out_unified, "iter_"),
-  final_path = file.path(out_unified, "final.Rda"),
-  generationSize = generationSize,
-  generations = generations,
-  nr_sims = nr_sims,
-  cores = cores
-)
+# bounds_unified <- list(
+#   "names" = c("pA", "dA", "tQA", "tAQ", "clone_mult", "pQ"),
+#   "lower" = c(0.4,  0.025,  0.0001,  0.01,  3, -0.05),
+#   "upper" = c(0.9, 0.15, 0.03, 0.075, 12, 1)
+# )
+# 
+# run_ga(
+#   bounds = bounds_unified,
+#   base_iter_path = file.path(out_unified, "iter_"),
+#   final_path = file.path(out_unified, "final.Rda"),
+#   generationSize = generationSize,
+#   generations = generations,
+#   nr_sims = nr_sims,
+#   cores = cores
+# )
 
 ## One Compartment ####
 bounds_one <- list(
   "names" = c("pA", "dA", "clone_mult"),
-  "lower" = c(0.4,  0.025,  12),
-  "upper" = c(0.9, 0.15, 50)
+  "lower" = c(0.4,  0.025,  3),
+  "upper" = c(0.9, 0.15, 20)
 )
 
 run_ga(
@@ -608,8 +608,8 @@ run_ga_dw_SO <- function(
 ### Run ####
 bounds_one <- list(
   "names" = c("pA", "dA", "clone_mult"),
-  "lower" = c(0.4,  0.025,  12),
-  "upper" = c(0.9, 0.15, 50)
+  "lower" = c(0.4,  0.025,  3),
+  "upper" = c(0.9, 0.15, 20)
 )
 
 run_ga_dw_SO(
