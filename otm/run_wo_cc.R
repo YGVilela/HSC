@@ -497,7 +497,7 @@ run_ga <- function(
 ## One Compartment ####
 bounds_one <- list(
   "names" = c("pA", "dA", "clone_mult"),
-  "lower" = c(0.4,  0.025,  3),
+  "lower" = c(0.1,  0.025,  3),
   "upper" = c(0.9, 0.15, 20)
 )
 
@@ -608,7 +608,7 @@ run_ga_dw_SO <- function(
 ### Run ####
 bounds_one <- list(
   "names" = c("pA", "dA", "clone_mult"),
-  "lower" = c(0.4,  0.025,  3),
+  "lower" = c(0.1,  0.025,  3),
   "upper" = c(0.9, 0.15, 20)
 )
 
