@@ -744,7 +744,7 @@ rename_graphs <- Vectorize(function(Graph_name) {
 })
 
 get_rs_df <- function(sim_data) {
-  load("otm/new_weights.Rda")
+  load("otm/weights.Rda")
   weight_df <- weight_df %>% rename(Subject = Animal_Id)
   
   return(merge(
@@ -1015,7 +1015,6 @@ time_points <- c(
 #   time_points = time_points
 # )
 
-# save(empiric_measures, file = "data/empiric_time_2.Rda")
 load("data/empiric_time.Rda")
 
 rename_action <- function(short_name) {

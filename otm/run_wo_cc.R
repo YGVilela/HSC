@@ -35,7 +35,7 @@ library(dplyr)
 library(GA)
 
 # Data #### 
-load("new_weights.Rda")
+load("weights.Rda")
 load("radtke_data.Rda")
 
 # Simulation function ####
