@@ -213,29 +213,40 @@ transform_pars <- function(otm_pars) {
   init_Q <- 0
   
   # Set carrying capacity based on equilibrium
-  eq_A <- aux_pars[["space_mult_A"]]*nr_clones
-  eq_Q <- aux_pars[["space_mult_Q"]]*nr_clones
-  
-  if(eq_A <= 0) {
-    stop("Active population on equilibrium is 0")
-  }
-  
-  if(eq_Q <= 0) {
-    stop("Quiescent population on equilibrium is 0")
-  }
-  
-  kA <- eq_A*pA/(pA - dA)
-  
-  kQ <- ifelse(
-    tAQ > 0 & tQA > 0,
-    eq_Q*(tAQ*pA*eq_A)/(tAQ*pA*eq_A - tQA*dA*eq_Q),
-    1
-  )
-  if(kA < 0) {
-    stop("Negative kA")
-  }
-  if(kQ < 0) {
-    stop("Negative kQ")
+  if("space_mult_A" %in% names(aux_pars) & "space_mult_Q" %in% names(aux_pars)) {
+    
+    eq_A <- aux_pars[["space_mult_A"]]*nr_clones
+    eq_Q <- aux_pars[["space_mult_Q"]]*nr_clones
+    
+    if(eq_A <= 0) {
+      stop("Active population on equilibrium is 0")
+    }
+    
+    if(eq_Q <= 0) {
+      stop("Quiescent population on equilibrium is 0")
+    }
+    
+    kA <- eq_A*pA/(pA - dA)
+    
+    kQ <- ifelse(
+      tAQ > 0 & tQA > 0,
+      eq_Q*(tAQ*pA*eq_A)/(tAQ*pA*eq_A - tQA*dA*eq_Q),
+      1
+    )
+    if(kA < 0) {
+      stop("Negative kA")
+    }
+    if(kQ < 0) {
+      stop("Negative kQ")
+    }
+  } else {
+    if(tAQ > 0 & tQA > 0) {
+      kA <- 1e5
+      kQ <- 1e5
+    } else {
+      kA <- 2e5
+      kQ <- 1
+    }
   }
   
   return(list(

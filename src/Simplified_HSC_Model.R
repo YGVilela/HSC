@@ -264,15 +264,15 @@ get_action_history <- function(
   return(action_history)
 }
 
-derive_analitic_times <- function(init_A, init_Q, rates) {
+derive_analitic_times <- function(rates, kA, kQ) {
   return(with(as.list(rates), {
     
-    eq_A <- init_A
-    eq_Q <- init_Q
-    
-    kA <- eq_A*pA/(pA - dA)
-    
-    kQ <- eq_Q*(tAQ*pA*eq_A)/(tAQ*pA*eq_A - tQA*dA*eq_Q)
+    # eq_A <- init_A
+    # eq_Q <- init_Q
+    # 
+    # kA <- eq_A*pA/(pA - dA)
+    # 
+    # kQ <- eq_Q*(tAQ*pA*eq_A)/(tAQ*pA*eq_A - tQA*dA*eq_Q)
     
     mean_diff <- 1/dA
     mean_prol <- 1/dA
@@ -290,12 +290,15 @@ derive_analitic_times <- function(init_A, init_Q, rates) {
   }))
 }
 
-measure_empiric_times <- function(max_time, init_A, init_Q, rates, base_rate = 1, time_points = NULL) {
+measure_empiric_times <- function(max_time, kA, kQ, rates, base_rate = 1, time_points = NULL) {
   if(is.null(time_points)) {
     time_points = c(max_time)
   }
   
   return(with(as.list(rates), {
+    init_A <- kA*(pA - dA)/pA
+    init_Q <- kQ*(tAQ*(pA - dA)*kA)/(tAQ*(pA - dA)*kA + tQA*dA*kQ)
+    
     options("scipen"=100, "digits"=4)
     
     measured_times <- matrix(
@@ -336,12 +339,12 @@ measure_empiric_times <- function(max_time, init_A, init_Q, rates, base_rate = 1
       )
     )
     
-    eq_A <- init_A
-    eq_Q <- init_Q
+    # eq_A <- init_A
+    # eq_Q <- init_Q
     
-    kA <- eq_A*pA/(pA - dA)
-    
-    kQ <- eq_Q*(tAQ*pA*eq_A)/(tAQ*pA*eq_A - tQA*dA*eq_Q)
+    # kA <- eq_A*pA/(pA - dA)
+    # 
+    # kQ <- eq_Q*(tAQ*pA*eq_A)/(tAQ*pA*eq_A - tQA*dA*eq_Q)
     
     pb <- progress::progress_bar$new(
       format = "[:bar :current/:total] (:eta)",

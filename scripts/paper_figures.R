@@ -26,355 +26,20 @@ library(ggpattern)
 library(dplyr)
 library(tidyr)
 library(RColorBrewer)
-
 source("src/Simplified_HSC_Model.R")
-source("src/optimization.R")
 
 load("data/derived_radtke.Rda")
 load("data/extracted_radtke.Rda")
 
-# Data ####
-data_diversity_plot <- ggplot(
-  clones_over_time,
-  aes(Time, Nr_Clones, color = Subject, group = Subject)
-) +
-  geom_line() +
-  geom_point() +
-  scale_color_manual(
-    values = color_scheme$Subject
-  ) +
-  labs(
-    title = "Clonal Diversity",
-    y = "Nr. Clones"
-  ) +
-  theme_classic() +
-  theme(legend.position = "none")
 
-ggsave(
-  filename = "img/clone_diversity.png",
-  plot = data_diversity_plot,
-  units = "cm",
-  width = 10,
-  height = 10
-)
-
-data_so_plot <- ggplot(
-  so_occurence %>% filter(Total_Cells > 100),
-  aes(Time, SO_Clone_Contribution, color = Subject, group = Subject)
-) +
-  geom_line() +
-  geom_point() +
-  scale_color_manual(
-    values = color_scheme$Subject
-  ) +
-  labs(
-    title = "Single-time Occurring Clones",
-    y = "Fraction of SO Clones"
-  ) +
-  theme_classic() +
-  theme(legend.position = "none")
-
-ggsave(
-  filename = "img/so_clones.png",
-  plot = data_so_plot,
-  units = "cm",
-  width = 10,
-  height = 10
-)
-
-data_cont_Z13264_plot <- ggplot(
-  clone_contribution_dist %>% filter(Subject == "Z13264", Time %in% c(
-    # 19, 40, 249, 397, 462, 1265
-    49, 300, 1265
-  )),
-  aes(Clone_Contribution, Frequency, color = as.factor(Time), group = Time)
-) +
-  geom_line() +
-  geom_point() +
-  # scale_color_manual(
-  #   values = color_scheme$Subject
-  # ) +
-  labs(
-    title = "Relative Clone Size (Z13264)",
-    y = "Frequency",
-    x = "Relative Clone Size"
-  ) +
-  scale_y_log10() + scale_x_log10() +
-  scale_color_manual(
-    values = 
-      c(
-        "49" = "#E9727C",
-        "40" = "#E34F5B",
-        "249" = "#DE2B3A",
-        "300" = "#C21E2C",
-        "462" = "#9F1924",
-        "1265" = "#7C131B"
-      )
-  ) +
-  theme_classic() +
-  theme(legend.position = "none")
-
-ggsave(
-  filename = "img/clone_contribution_Z13264.png",
-  plot = data_cont_Z13264_plot,
-  units = "cm",
-  width = 10,
-  height = 10
-)
-
-data_cont_Z14004_plot <- ggplot(
-  clone_contribution_dist %>% filter(Subject == "Z14004", Time %in% c(
-    # 14, 84, 266, 362, 495, 1309
-    28, 210,1111
-  )),
-  aes(Clone_Contribution, Frequency, color = as.factor(Time), group = Time)
-) +
-  geom_line() +
-  geom_point() +
-  # scale_color_manual(
-  #   values = color_scheme$Subject
-  # ) +
-  labs(
-    title = "Relative Clone Size (Z14004)",
-    y = "Frequency",
-    x = "Relative Clone Size"
-  ) +
-  scale_y_log10() + scale_x_log10() +
-  scale_color_manual(
-    values = 
-      c(
-        "28" = "#24D2F9",
-        "84" = "#06C4EF",
-        "138" = "#05A3C7",
-        "210" = "#04839F",
-        "495" = "#036277",
-        "1111" = "#024150"
-      )
-  ) +
-  theme_classic() +
-  theme(legend.position = "none")
-
-ggsave(
-  filename = "img/clone_contribution_Z14004.png",
-  plot = data_cont_Z14004_plot,
-  units = "cm",
-  width = 10,
-  height = 10
-)
-
-cell_types_plot <- ggplot(
-  cell_by_group %>% filter(Cell_Group != "WBC"),
-  aes(
-    Time, Count,
-    color = Cell_Group,
-    group = Cell_Group
-  )
-) +
-  geom_line(linewidth = 0.2) +
-  geom_point(stroke = 0.16, size = 1) +
-  geom_line(
-    data = cell_by_group %>% filter(Cell_Group == "WBC"),
-    # color = "black",
-    linewidth = 0.4
-  ) +
-  geom_point(
-    data = cell_by_group %>% filter(Cell_Group == "WBC"),
-    # color = "black",
-    shape = "cross",
-    size = 1,
-    stroke = 0.6
-  ) +
-  scale_y_log10() +
-  scale_color_manual(values = c(
-    brewer.pal(8, "Set2"),
-    "black"
-  )) +
-  theme_classic() +
-  labs(
-    title = "Observed Cell Types",
-    color = "Cell Type"
-  )
-
-ggsave(
-  filename = "img/cell_types.png",
-  plot = cell_types_plot,
-  units = "cm",
-  width = 20,
-  height = 12
-)
-
-# Model ####
-## Generate Data ####
-get_best_sim_data <- function(ga_path, nr_sims = 1) {
-  load(ga_path)
-  
-  best_data <- run_one_cell(
-    ga_res@solution[1, ],
-    return_result = TRUE,
-    nr_sims = nr_sims,
-    sim_parallel = TRUE
-  )
-  
-  diversity_data <- bind_rows(
-    Z13264 = do.call(
-      rbind, 
-      lapply(1:nr_sims, function(sim_idx) 
-        get_diversity_df(best_data$Z13264[[sim_idx]]) %>%
-          mutate(Sim_Idx = sim_idx)
-      )
-    ),
-    Z14004 = do.call(
-      rbind, 
-      lapply(1:nr_sims, function(sim_idx) 
-        get_diversity_df(best_data$Z14004[[sim_idx]]) %>%
-          mutate(Sim_Idx = sim_idx)
-      )
-    ),
-    .id = "Subject"
-  )
-  
-  contribution_data <- bind_rows(
-    Z13264 = do.call(
-      rbind, 
-      lapply(1:nr_sims, function(sim_idx) 
-        get_contribution_dist_df(
-          best_data$Z13264[[sim_idx]],
-          break_list = break_list$Z13264
-        ) %>%
-          mutate(Sim_Idx = sim_idx)
-      )
-    ),
-    Z14004 = do.call(
-      rbind, 
-      lapply(1:nr_sims, function(sim_idx) 
-        get_contribution_dist_df(
-          best_data$Z14004[[sim_idx]],
-          break_list = break_list$Z14004
-        ) %>%
-          mutate(Sim_Idx = sim_idx)
-      )
-    ),
-    .id = "Subject"
-  )
-  
-  so_data <- bind_rows(
-    Z13264 = do.call(
-      rbind, 
-      lapply(1:nr_sims, function(sim_idx) 
-        get_so_df(best_data$Z13264[[sim_idx]]) %>%
-          mutate(Sim_Idx = sim_idx)
-      )
-    ),
-    Z14004 = do.call(
-      rbind, 
-      lapply(1:nr_sims, function(sim_idx) 
-        get_so_df(best_data$Z14004[[sim_idx]]) %>%
-          mutate(Sim_Idx = sim_idx)
-      )
-    ),
-    .id = "Subject"
-  )
-  
-  diff_data <- do.call(
-    rbind, 
-    lapply(1:nr_sims, function(sim_idx) {
-      df <- get_full_diffs_df(list(
-        Z13264 = get_differences(list(best_data$Z13264[[sim_idx]]), 1, "Z13264"),
-        Z14004 = get_differences(list(best_data$Z14004[[sim_idx]]), 1, "Z14004")
-      )) %>%
-        mutate(Sim_Idx = sim_idx)
-      # %>%
-      #   merge(
-      #     point_weights,
-      #     all.x = TRUE,
-      #     all.y = FALSE
-      #   ) %>%
-      #   merge(
-      #     graph_weights,
-      #     by = c("Subject", "Graph"),
-      #     all.x = TRUE,
-      #     all.y = FALSE,
-      #     suffixes = c("_Point", "_Graph")
-      #   ) %>%
-      #   mutate(
-      #     Res = 
-      #       Res*
-      #       coalesce(Weight_Point, 1)*
-      #       sqrt(coalesce(abs(Weight_Graph), 1))
-      #   ) %>%
-      #   mutate(Aspect = paste(Subject, Graph, sep = "_")) %>%
-      #   group_by(Aspect) %>%
-      #   mutate(RSS = sum(Res**2)) %>%
-      #   ungroup()
-      # 
-      # df$Total <- sum((df %>% group_by(Aspect) %>% summarise(RSS = RSS[1]))$RSS)
-      # 
-      return(df)
-    })
-  )
-  
-  return(list(
-    Diversity = diversity_data,
-    Contribution = contribution_data,
-    SO = so_data,
-    Diffs = diff_data
-  ))
-}
-
-# best_two_compt <- get_best_sim_data(
-#   "otm/data/two/final.Rda",
-#   nr_sims = 100
-# )
-# best_unified <- get_best_sim_data(
-#   "otm/data/unified/final.Rda",
-#   nr_sims = 100
-# )
-# 
-# for(i in 1:10){
-#   best_one <- get_best_sim_data(
-#     "otm/data/one/final.Rda",
-#     nr_sims = 10
-#   )
-#   
-#   # save(
-#   #   best_one,
-#   #   file = paste0("data/paper_one_", i, ".Rda")
-#   # )
-# }
-# 
-# best_one_compt <- list(
-#   Diversity = data.frame(),
-#   Contribution = data.frame(),
-#   SO = data.frame(),
-#   Diffs = data.frame()
-# )
-# for(i in 1:10){
-#   load(paste0("data/paper_one_", i, ".Rda"))
-#   best_one_compt$Diversity <- bind_rows(best_one_compt$Diversity, best_one$Diversity %>% mutate(Sim_Idx = Sim_Idx + (i-1)*10))
-#   best_one_compt$Contribution <- bind_rows(best_one_compt$Contribution, best_one$Contribution %>% mutate(Sim_Idx = Sim_Idx + (i-1)*10))
-#   best_one_compt$SO <- bind_rows(best_one_compt$SO, best_one$SO %>% mutate(Sim_Idx = Sim_Idx + (i-1)*10))
-#   best_one_compt$Diffs <- bind_rows(best_one_compt$Diffs, best_one$Diffs %>% mutate(Sim_Idx = Sim_Idx + (i-1)*10))
-# }
-# 
-# best_one_WO_SO <- get_best_sim_data(
-#   "otm/data/unified/final.Rda",
-#   nr_sims = 100
-# )
-
-# save(
-#   best_one_compt, best_two_compt, best_unified, best_one_WO_SO,
-#   file = "data/paper_sim.Rda"
-# )
-
-load("data/paper_sim.Rda")
-
-## Plot functions ####
+# Metric plots ####
 get_div_plot <- function(
     data_list,
     facet_by_model = TRUE,
     show_data = TRUE,
-    add_pattern = TRUE
-  ) {
+    add_pattern = TRUE,
+    crop_y = TRUE
+) {
   model_data <- bind_rows(
     data_list,
     .id = "Model"
@@ -392,13 +57,13 @@ get_div_plot <- function(
     stat_summary(fun = "mean", geom = "point") +
     theme_classic() +
     theme(legend.position = "none") +
-    ylim(0, 20000) +
     scale_color_manual(
       values = color_scheme$Subject
     ) +
     labs(
       title = "Clonal Diversity",
-      y = "Nr. Clones"
+      y = "Number of Clones",
+      x = "Time [days]"
     )
   
   if(show_data) {
@@ -409,11 +74,11 @@ get_div_plot <- function(
         shape = "cross",
         stroke = 1.1
       ) +
-        geom_line(
-          data = clones_over_time,
-          aes(group = Subject),
-          linetype = "dashed"
-        )
+      geom_line(
+        data = clones_over_time,
+        aes(group = Subject),
+        linetype = "dashed"
+      )
   }
   
   if(add_pattern) {
@@ -441,6 +106,10 @@ get_div_plot <- function(
     div_plot <- div_plot + facet_grid(cols = vars(Model))
   }
   
+  if(crop_y) {
+    div_plot <- div_plot + ylim(0, 20000)
+  }
+  
   return(div_plot)
 }
 
@@ -448,7 +117,8 @@ get_so_plot <- function(
     data_list,
     facet_by_model = TRUE,
     show_data = TRUE,
-    add_pattern = TRUE
+    add_pattern = TRUE,
+    crop_y = TRUE
 ) {
   model_data <- bind_rows(
     data_list,
@@ -468,13 +138,13 @@ get_so_plot <- function(
     stat_summary(fun = "mean", geom = "point") +
     theme_classic() +
     theme(legend.position = "none") +
-    ylim(-0.01, 0.75) +
     scale_color_manual(
       values = color_scheme$Subject
     ) +
     labs(
       title = "Single-time Occurring Clones",
-      y = "Fraction of SO Clones"
+      y = "Fraction of SO Clones",
+      x = "Time [days]"
     )
   
   if(show_data) {
@@ -517,6 +187,10 @@ get_so_plot <- function(
     so_plot <- so_plot + facet_grid(cols = vars(Model))
   }
   
+  if(crop_y) {
+    so_plot <- so_plot + ylim(-0.01, 0.75)
+  }
+  
   return(so_plot)
 }
 
@@ -524,13 +198,20 @@ get_contribution_Z14004_plot <- function(
     data_list,
     facet_by_model = TRUE,
     show_data = TRUE,
-    add_pattern = TRUE
+    add_pattern = TRUE,
+    time_colors = c(
+      "362" = "#04839F",
+      "495" = "#024150"
+    )
 ) {
   model_data <- bind_rows(
     data_list,
     .id = "Model"
   ) %>%
-    filter(Time %in% c(362, 495) & Subject == "Z14004")
+    filter(
+      Time %in% as.integer(names(time_colors)) &
+      Subject == "Z14004"
+    )
   
   cont_plot <- ggplot(
     model_data,
@@ -546,15 +227,10 @@ get_contribution_Z14004_plot <- function(
     theme(legend.position = "none") +
     scale_y_log10() + scale_x_log10() +
     scale_color_manual(
-      values = 
-        c(
-          # "362" = "#24D2F9",
-          "362" = "#04839F",
-          "495" = "#024150"
-        )
+      values = time_colors
     ) +
     labs(
-      title = "Relative Clone Size (Z14004)",
+      title = "Clone Size Distribution (Z14004)",
       y = "Frequency",
       x = "Relative Clone Size"
     )
@@ -563,7 +239,7 @@ get_contribution_Z14004_plot <- function(
     cont_plot <- cont_plot + 
       geom_point(
         data = clone_contribution_dist  %>% filter(
-          Time %in% c(362, 495),
+          Time %in% as.integer(names(time_colors)) &
           Subject == "Z14004"
         ),
         mapping = aes(group = Time),
@@ -572,7 +248,7 @@ get_contribution_Z14004_plot <- function(
       ) +
       geom_line(
         data = clone_contribution_dist  %>% filter(
-          Time %in% c(362, 495),
+          Time %in% as.integer(names(time_colors)) &
           Subject == "Z14004"
         ),
         mapping = aes(group = Time),
@@ -612,13 +288,20 @@ get_contribution_Z13264_plot <- function(
     data_list,
     facet_by_model = TRUE,
     show_data = TRUE,
-    add_pattern = TRUE
+    add_pattern = TRUE,
+    time_colors = c(
+      "397" = "#C21E2C",
+      "462" = "#7C131B"
+    )
 ) {
   model_data <- bind_rows(
     data_list,
     .id = "Model"
   ) %>%
-    filter(Time %in% c(397, 462) & Subject == "Z13264")
+    filter(
+      Time %in% as.integer(names(time_colors)) &
+      Subject == "Z13264"
+    )
   
   cont_plot <- ggplot(
     model_data,
@@ -634,14 +317,10 @@ get_contribution_Z13264_plot <- function(
     theme(legend.position = "none") +
     scale_y_log10() + scale_x_log10() +
     scale_color_manual(
-      values = 
-        c(
-          "397" = "#C21E2C",
-          "462" = "#7C131B"
-        )
+      values = time_colors
     ) +
     labs(
-      title = "Relative Clone Size (Z13264)",
+      title = "Clone Size Distribution (Z13264)",
       y = "Frequency",
       x = "Relative Clone Size"
     )
@@ -650,7 +329,7 @@ get_contribution_Z13264_plot <- function(
     cont_plot <- cont_plot + 
       geom_point(
         data = clone_contribution_dist  %>% filter(
-          Time %in% c(397, 462),
+          Time %in% as.integer(names(time_colors)) &
           Subject == "Z13264"
         ),
         mapping = aes(group = Time),
@@ -659,7 +338,7 @@ get_contribution_Z13264_plot <- function(
       ) +
       geom_line(
         data = clone_contribution_dist  %>% filter(
-          Time %in% c(397, 462),
+          Time %in% as.integer(names(time_colors)) &
           Subject == "Z13264"
         ),
         mapping = aes(group = Time),
@@ -695,6 +374,275 @@ get_contribution_Z13264_plot <- function(
   return(cont_plot)
 }
 
+
+# Data ####
+## Diversity ####
+data_diversity_plot <- get_div_plot(
+  clones_over_time, 
+  facet_by_model = FALSE,
+  show_data = FALSE,
+  add_pattern = FALSE,
+  crop_y = FALSE
+)
+
+ggsave(
+  filename = "img/clone_diversity.png",
+  plot = data_diversity_plot,
+  units = "cm",
+  width = 10,
+  height = 10
+)
+
+## SO ####
+data_so_plot <- get_so_plot(
+  so_occurence,
+  facet_by_model = FALSE,
+  show_data = FALSE,
+  add_pattern = FALSE,
+  crop_y = FALSE
+)
+
+ggsave(
+  filename = "img/so_clones.png",
+  plot = data_so_plot,
+  units = "cm",
+  width = 10,
+  height = 10
+)
+
+## Contribution Z13264 ####
+data_cont_Z13264_plot <- get_contribution_Z13264_plot(
+  clone_contribution_dist,
+  facet_by_model = FALSE,
+  show_data = FALSE,
+  add_pattern = FALSE,
+  time_colors = c(
+    "49" = "#E9727C",
+    "300" = "#C21E2C",
+    "1265" = "#7C131B"
+  )
+)
+
+ggsave(
+  filename = "img/clone_contribution_Z13264.png",
+  plot = data_cont_Z13264_plot,
+  units = "cm",
+  width = 10,
+  height = 10
+)
+
+## Contribution Z14004 ####
+data_cont_Z14004_plot <- get_contribution_Z14004_plot(
+  clone_contribution_dist,
+  facet_by_model = FALSE,
+  show_data = FALSE,
+  add_pattern = FALSE,
+  time_colors = c(
+    "28" = "#24D2F9",
+    "210" = "#04839F",
+    "1111" = "#024150"
+  )
+)
+
+ggsave(
+  filename = "img/clone_contribution_Z14004.png",
+  plot = data_cont_Z14004_plot,
+  units = "cm",
+  width = 10,
+  height = 10
+)
+
+## Cell types ####
+cell_types_plot <- ggplot(
+  cell_by_group %>% filter(Cell_Group != "WBC"),
+  aes(
+    Time, Count,
+    color = Cell_Group,
+    group = Cell_Group
+  )
+) +
+  geom_line(linewidth = 0.2) +
+  geom_point(stroke = 0.16, size = 1) +
+  geom_line(
+    data = cell_by_group %>% filter(Cell_Group == "WBC"),
+    # color = "black",
+    linewidth = 0.4
+  ) +
+  geom_point(
+    data = cell_by_group %>% filter(Cell_Group == "WBC"),
+    # color = "black",
+    shape = "cross",
+    size = 1,
+    stroke = 0.6
+  ) +
+  scale_y_log10() +
+  scale_color_manual(values = c(
+    brewer.pal(8, "Set2"),
+    "black"
+  )) +
+  theme_classic() +
+  labs(
+    title = "Observed Cell Types",
+    color = "Cell Type",
+    x = "Time [days]",
+    y = "Number of Cells"
+  )
+
+ggsave(
+  filename = "img/cell_types.png",
+  plot = cell_types_plot,
+  units = "cm",
+  width = 15,
+  height = 8
+)
+
+# Model ####
+## Generate Data ####
+# get_best_sim_data <- function(ga_path, nr_sims = 1) {
+#   source("src/optimization.R")
+# 
+#   load(ga_path)
+# 
+#   best_data <- run_one_cell(
+#     ga_res@solution[1, ],
+#     return_result = TRUE,
+#     nr_sims = nr_sims,
+#     sim_parallel = TRUE
+#   )
+# 
+#   diversity_data <- bind_rows(
+#     Z13264 = do.call(
+#       rbind,
+#       lapply(1:nr_sims, function(sim_idx)
+#         get_diversity_df(best_data$Z13264[[sim_idx]]) %>%
+#           mutate(Sim_Idx = sim_idx)
+#       )
+#     ),
+#     Z14004 = do.call(
+#       rbind,
+#       lapply(1:nr_sims, function(sim_idx)
+#         get_diversity_df(best_data$Z14004[[sim_idx]]) %>%
+#           mutate(Sim_Idx = sim_idx)
+#       )
+#     ),
+#     .id = "Subject"
+#   )
+# 
+#   contribution_data <- bind_rows(
+#     Z13264 = do.call(
+#       rbind,
+#       lapply(1:nr_sims, function(sim_idx)
+#         get_contribution_dist_df(
+#           best_data$Z13264[[sim_idx]],
+#           break_list = break_list$Z13264
+#         ) %>%
+#           mutate(Sim_Idx = sim_idx)
+#       )
+#     ),
+#     Z14004 = do.call(
+#       rbind,
+#       lapply(1:nr_sims, function(sim_idx)
+#         get_contribution_dist_df(
+#           best_data$Z14004[[sim_idx]],
+#           break_list = break_list$Z14004
+#         ) %>%
+#           mutate(Sim_Idx = sim_idx)
+#       )
+#     ),
+#     .id = "Subject"
+#   )
+# 
+#   so_data <- bind_rows(
+#     Z13264 = do.call(
+#       rbind,
+#       lapply(1:nr_sims, function(sim_idx)
+#         get_so_df(best_data$Z13264[[sim_idx]]) %>%
+#           mutate(Sim_Idx = sim_idx)
+#       )
+#     ),
+#     Z14004 = do.call(
+#       rbind,
+#       lapply(1:nr_sims, function(sim_idx)
+#         get_so_df(best_data$Z14004[[sim_idx]]) %>%
+#           mutate(Sim_Idx = sim_idx)
+#       )
+#     ),
+#     .id = "Subject"
+#   )
+# 
+#   diff_data <- do.call(
+#     rbind,
+#     lapply(1:nr_sims, function(sim_idx) {
+#       df <- get_full_diffs_df(list(
+#         Z13264 = get_differences(list(best_data$Z13264[[sim_idx]]), 1, "Z13264"),
+#         Z14004 = get_differences(list(best_data$Z14004[[sim_idx]]), 1, "Z14004")
+#       )) %>%
+#         mutate(Sim_Idx = sim_idx)
+#       # %>%
+#       #   merge(
+#       #     point_weights,
+#       #     all.x = TRUE,
+#       #     all.y = FALSE
+#       #   ) %>%
+#       #   merge(
+#       #     graph_weights,
+#       #     by = c("Subject", "Graph"),
+#       #     all.x = TRUE,
+#       #     all.y = FALSE,
+#       #     suffixes = c("_Point", "_Graph")
+#       #   ) %>%
+#       #   mutate(
+#       #     Res =
+#       #       Res*
+#       #       coalesce(Weight_Point, 1)*
+#       #       sqrt(coalesce(abs(Weight_Graph), 1))
+#       #   ) %>%
+#       #   mutate(Aspect = paste(Subject, Graph, sep = "_")) %>%
+#       #   group_by(Aspect) %>%
+#       #   mutate(RSS = sum(Res**2)) %>%
+#       #   ungroup()
+#       #
+#       # df$Total <- sum((df %>% group_by(Aspect) %>% summarise(RSS = RSS[1]))$RSS)
+#       #
+#       return(df)
+#     })
+#   )
+# 
+#   return(list(
+#     Diversity = diversity_data,
+#     Contribution = contribution_data,
+#     SO = so_data,
+#     Diffs = diff_data
+#   ))
+# }
+
+# best_two_compt <- get_best_sim_data(
+#   "otm/data/two/final.Rda",
+#   nr_sims = 100
+# )
+# 
+# best_unified <- get_best_sim_data(
+#   "otm/data/unified/final.Rda",
+#   nr_sims = 100
+# )
+#
+# best_one_compt <- get_best_sim_data(
+#   "otm/data/one/final.Rda",
+#   nr_sims = 100
+# )
+# 
+# best_one_dw <- get_best_sim_data(
+#   "otm/data/one_dw_SO/final.Rda",
+#   nr_sims = 100
+# )
+
+# save(
+#   best_two_compt, best_unified, best_one_compt, best_one_dw,
+#   file = "data/paper_sim.Rda"
+# )
+
+load("data/paper_sim.Rda")
+
 # One Compt. vs Two Compt. ####
 ## Diversity ####
 div_plot <- get_div_plot(list(
@@ -723,7 +671,6 @@ ggsave(
   width = 20,
   height = 10
 )
-
 
 so_one_zoom <- ggplot(
   best_one_compt$SO %>% filter(Time > 360),
@@ -797,7 +744,6 @@ rename_graphs <- Vectorize(function(Graph_name) {
 })
 
 get_rs_df <- function(sim_data) {
-  # load("data/optimization/weights.Rda")
   load("otm/new_weights.Rda")
   weight_df <- weight_df %>% rename(Subject = Animal_Id)
   
@@ -809,7 +755,6 @@ get_rs_df <- function(sim_data) {
     all.y = FALSE
   ) %>%
     mutate(
-      # Normalized_Res = Res*coalesce(Weight, 1)
       Normalized_Res = Res*coalesce(Graph_Weight, 1)
     ) %>%
     group_by(Subject, Graph, Sim_Idx) %>%
@@ -827,11 +772,9 @@ rss_df <- bind_rows(
   "One-compartment" = get_rs_df(best_one_compt$Diffs),
   "Two-compartment" = get_rs_df(best_two_compt$Diffs),
   "Unified" = get_rs_df(best_unified$Diffs),
-  "One-compartment (Downweighted SO)" = get_rs_df(best_one_WO_SO$Diffs),
+  "One-compartment (Downweighted SO)" = get_rs_df(best_one_dw$Diffs),
   .id = "Model"
 )
-
-### Plot ####
 
 mean_rss <- rss_df %>%
   filter(Model %in% c("One-compartment", "Two-compartment")) %>%
@@ -861,12 +804,13 @@ progressive_df <- mean_rss %>%
     SO = Contribution_4 + SO
   ) %>%
   pivot_longer(!c(Model, Subject), names_to = "Graph", values_to = "Normalized_RSM")
+### Plot ####
 
 rss_plot <- ggplot(
   mean_rss %>%
     mutate(Graph = rename_graphs(Graph), X = Graph),
   aes(
-    X,
+    interaction(sub("compartment", "comp.", Model), Subject, sep = "\n"),
     Normalized_RSM,
     group = Model,
     fill = Graph,
@@ -910,90 +854,15 @@ rss_plot <- ggplot(
       filter(Graph == metric_order[4]) %>%
       mutate(Graph = rename_graphs(Graph), X = "Total")
   ) +
-  facet_wrap(vars(Subject)) +
+  facet_wrap(vars(X), scales = "free") +
   theme_classic() +
   scale_fill_manual(values = color_scheme$Aspects) +
   theme(
-    axis.text.x = element_text(angle = -30, vjust = 0.5, hjust=0),
     legend.position = "none"
   ) +
   labs(
     y = "Residuals",
-    x = "Graph",
-    title = "Best Fit RSS (One Compt. vs Two Compt.)"
-  ) +
-  scale_pattern_manual(values = c(
-    "One-compartment" = "stripe",
-    "Two-compartment" = "none"
-  ))
-
-ggsave(
-  plot = rss_plot,
-  filename = "img/rss.png",
-  units = "cm",
-  width = 25,
-  height = 15
-)
-
-rss_plot_V2 <- ggplot(
-  mean_rss %>%
-    mutate(Graph = rename_graphs(Graph), X = Graph),
-  aes(
-    Subject,
-    Normalized_RSM,
-    group = Model,
-    fill = Graph,
-    pattern = Model
-  )
-) +
-  geom_col_pattern(
-    position = "dodge", color = "black",
-    pattern_angle  = 45,
-    pattern_spacing = 0.02
-  ) +
-  geom_col_pattern(
-    color = "black", position = "dodge",
-    pattern_angle  = 45,
-    pattern_spacing = 0.02,
-    data = progressive_df %>% 
-      filter(Graph == metric_order[1]) %>%
-      mutate(Graph = rename_graphs(Graph), X = "Total")
-  ) +
-  geom_col_pattern(
-    color = "black", position = "dodge",
-    pattern_angle  = 45,
-    pattern_spacing = 0.02,
-    data = progressive_df %>% 
-      filter(Graph == metric_order[2]) %>%
-      mutate(Graph = rename_graphs(Graph), X = "Total")
-  ) +
-  geom_col_pattern(
-    color = "black", position = "dodge",
-    pattern_angle  = 45,
-    pattern_spacing = 0.02,
-    data = progressive_df %>% 
-      filter(Graph == metric_order[3]) %>%
-      mutate(Graph = rename_graphs(Graph), X = "Total")
-  ) +
-  geom_col_pattern(
-    color = "black", position = "dodge",
-    pattern_angle  = 45,
-    pattern_spacing = 0.02,
-    data = progressive_df %>% 
-      filter(Graph == metric_order[4]) %>%
-      mutate(Graph = rename_graphs(Graph), X = "Total")
-  ) +
-  facet_wrap(vars(interaction(X)), scales = "free_y") +
-  theme_classic() +
-  scale_fill_manual(values = color_scheme$Aspects) +
-  theme(
-    # axis.text.x = element_text(angle = -30, vjust = 0.5, hjust=0),
-    legend.position = "none"
-  ) +
-  labs(
-    y = "Residuals",
-    x = " ",
-    # title = "Best Fit RSS (One Compt. vs Two Compt.)"
+    x = " "
   ) +
   scale_pattern_manual(values = c(
     "One-compartment" = "none",
@@ -1001,8 +870,8 @@ rss_plot_V2 <- ggplot(
   ))
 
 ggsave(
-  plot = rss_plot_V2,
-  filename = "img/rss_v2.png",
+  plot = rss_plot,
+  filename = "img/rss.png",
   units = "cm",
   width = 25,
   height = 15
@@ -1068,7 +937,7 @@ ggsave(
 # Downweighted One Compt. ####
 ## Diversity ####
 div_plot <- get_div_plot(
-  best_one_WO_SO$Diversity, 
+  best_one_dw$Diversity, 
   facet_by_model = FALSE
 )
 
@@ -1082,7 +951,7 @@ ggsave(
 
 ## SO ####
 so_plot <- get_so_plot(
-  best_one_WO_SO$SO, 
+  best_one_dw$SO, 
   facet_by_model = FALSE
 )
 
@@ -1096,7 +965,7 @@ ggsave(
 
 ## Contribution Z14004 ####
 cont_Z14004_plot <- get_contribution_Z14004_plot(
-  best_one_WO_SO$Contribution, 
+  best_one_dw$Contribution, 
   facet_by_model = FALSE
 )
 
@@ -1110,7 +979,7 @@ ggsave(
 
 ## Contribution Z13264 ####
 cont_Z13264_plot <- get_contribution_Z13264_plot(
-  best_one_WO_SO$Contribution, 
+  best_one_dw$Contribution, 
   facet_by_model = FALSE
 )
 
@@ -1127,11 +996,9 @@ ggsave(
 load("otm/data/two/final.Rda")
 
 best_rates <- ga_res@solution[1, c("pA", "dA", "tQA", "tAQ")]
-best_A <- ceiling(1e3*ga_res@solution[[1, "clone_mult"]]*ga_res@solution[[1, "space_mult_A"]])
-best_Q <- ceiling(1e3*ga_res@solution[[1, "clone_mult"]]*ga_res@solution[[1, "space_mult_Q"]])
 
 best_fit_analitic <- derive_analitic_times(
-  best_A, best_Q, best_rates
+  best_rates, kA = 1e5, kQ = 1e5
 )
 
 time_points <- c(
@@ -1141,58 +1008,73 @@ time_points <- c(
   10000*c(1, 1.7, 3, 5.5),
   100000
 )
-# 
+
 # empiric_measures <- measure_empiric_times(
 #   100002,
-#   best_A, best_Q, best_rates,
+#   1e5, 1e5, best_rates,
 #   time_points = time_points
 # )
 
-# save(empiric_measures, file = "data/empiric_time.Rda")
+# save(empiric_measures, file = "data/empiric_time_2.Rda")
 load("data/empiric_time.Rda")
 
-action_counter_df <- empiric_measures$Counter %>%
-  t() %>% data.frame() %>%
-  mutate(
-    Time = 1:length(Act)
-  ) %>%
-  rename(
-    Activation = "Act",
-    Deactivation = "Deact",
-    Differentiation = "Diff",
-    Proliferation = "Prol"
+rename_action <- function(short_name) {
+  switch(
+    short_name,
+    Act = "Activation",
+    Deact = "Deactivation",
+    Diff = "Differentiation",
+    Prol = "Proliferation"
   )
+}
 
-empiric_time_summary <- action_counter_df %>%
-  pivot_longer(!c(Time), names_to = "Action") %>%
-  group_by(Action) %>%
-  group_modify(function(curr_df, curr_key) {
-    full_array <- rep(curr_df$Time, curr_df$value)
-    sum_df <- summary(full_array) %>%
-      t() %>% data.frame() %>%
-      rename(Stat = Var2, Value = Freq) %>%
-      select(Stat, Value)
+empiric_time_summary <- bind_rows(lapply(rownames(empiric_measures$Counter), function(action_name) {
+  qtl <- Hmisc::wtd.quantile(
+    x = 1:max(time_points),
+    weights = empiric_measures$Counter[action_name, 1:max(time_points)],
+    probs = c(.25, .5, .75)
+  )
+  names(qtl) <- NULL
+  mn <- weighted.mean(
+    x = 1:max(time_points),
+    w = empiric_measures$Counter[action_name, 1:max(time_points)]
+  )
+  
+  data.frame(
+    Action = rename_action(action_name),
+    Stat = c("1st Qu.", "Median", "3rd Qu.", "Mean"),
+    Value = c(qtl, mn)
+  )
+  
+}))
+
+empiric_prob_df <- bind_rows(lapply(rownames(empiric_measures$Counter), function(action_name) {
+  final_time <- tail(which(empiric_measures$Counter[action_name, 1:max(time_points)] > 0), 1)
+  total_cells <- sum(empiric_measures$Counter[action_name, 1:final_time])
+  if(grepl("act", action_name, ignore.case = TRUE)) {
     
-    return(sum_df)
-  }) %>%
-  ungroup()
-
-empiric_prob_df <- action_counter_df %>%
-  pivot_longer(!c(Time), names_to = "Action") %>%
-  mutate(
-    # Manually binning observations
-    Time_Spaced = ifelse(
-      grepl("activation", Action, ignore.case = TRUE), 
-      100*ceiling(Time/100), 
-      Time
-    )
-  ) %>%
-  filter(value != 0) %>%
-  group_by(Time_Spaced, Action) %>%
-  summarise(value = sum(value), .groups = "drop") %>%
-  group_by(Action) %>%
-  mutate(Prob = value/sum(value)) %>%
-  ungroup()
+    space <- 200
+    return(bind_rows(lapply(1:ceiling(final_time/space) - 1, function(curr_bin) {
+      curr_tps <- ((curr_bin*space) + 1):((curr_bin+1)*space)
+      curr_prob <- sum(empiric_measures$Counter[action_name, curr_tps])/total_cells
+      
+      return(data.frame(
+        Action = rename_action(action_name),
+        Time_Spaced = (curr_bin*space) + 1,
+        Prob = curr_prob
+      ))
+    })) %>% filter(Prob > 0))
+  } else {
+    probs <- empiric_measures$Counter[action_name, 1:final_time]/total_cells
+    names(probs) = NULL
+    
+    return(data.frame(
+      Action = rename_action(action_name),
+      Time_Spaced = 1:final_time,
+      Prob = probs
+    ) %>% filter(Prob > 0))
+  }
+}))
 
 ## Plots ####
 best_fit_experimental <- empiric_measures$Measured_Times %>%
@@ -1235,8 +1117,8 @@ avg_time_plot <- ggplot(
   facet_wrap(vars(name), scales = "free_y") +
   theme_classic() +
   labs(
-    x = "Simulation Time",
-    y = "Average Time for Event"
+    x = "Simulation Time [days]",
+    y = "Average Time to Event"
   )
 
 ggsave(
@@ -1248,15 +1130,18 @@ ggsave(
 )
 
 cells_per_time_plot <- ggplot(
-  empiric_prob_df,
+  empiric_prob_df %>%
+    filter(
+      (Time_Spaced < 10000 & grepl("act", Action, ignore.case = TRUE)) |
+      (Time_Spaced < 50 & !grepl("act", Action, ignore.case = TRUE))
+    ),
   aes(Time_Spaced, Prob)
 ) +
   geom_vline(
-    data = empiric_time_summary %>%
-      filter(!(Stat %in% c("Min.", "Max."))),
+    data = empiric_time_summary,
     mapping = aes(
       xintercept = Value,
-      color = Stat
+      color = factor(Stat, levels = c("1st Qu.", "Median", "Mean", "3rd Qu."))
     ),
     linetype = "dashed",
     linewidth = 0.7
@@ -1265,8 +1150,9 @@ cells_per_time_plot <- ggplot(
   facet_wrap(vars(Action), scales = "free") +
   theme_classic() +
   labs(
-    x = "Time",
-    y = "Probability"
+    x = "Time [days]",
+    y = "Probability",
+    color = "Statistic"
   )
 
 ggsave(
@@ -1277,58 +1163,14 @@ ggsave(
   heigh = 12
 )
 
-## Time Convergence ####
-experimental_plt <- ggplot(
-  best_fit_experimental %>%
-    rename(
-      Activation = "Act",
-      Deactivation = "Deact",
-      Differentiation = "Diff",
-      Proliferation = "Prol"
-    ) %>%
-    pivot_longer(!Time),
-  aes(Time, value, group = interaction(name, Time))
-) +
-  geom_point() +
-  geom_hline(
-    data = data.frame(
-      name = c("Activation", "Deactivation", "Differentiation", "Proliferation"),
-      value = c(
-        best_fit_analitic[["Act"]], best_fit_analitic[["Deact"]],
-        best_fit_analitic[["Diff"]],  best_fit_analitic[["Prol"]]
-      )
-    ),
-    mapping = aes(yintercept = value),
-    linetype = "dashed",
-    linewidth = 1.
-  ) +
-  facet_wrap(vars(name), scales = "free_y") +
-  scale_x_log10() + scale_y_log10() +
-  # scale_linetype_manual(values = c("Analitical Rate" = "dashed")) +
-  theme_classic() +
-  theme(legend.position = "bottom", legend.justification = "left") +
-  labs(
-    # title = "Empirical Time for Action",
-    y = "Estimated Mean Time for Action",
-    x = "Simulation Time"
-  )
-
-ggsave(
-  filename = "img/estimated_rates.png",
-  plot = experimental_plt,
-  units = "cm", 
-  width = 20,
-  heigh = 12
-)
-
 # AIC ####
 ## Adjust Data ####
 get_n_pars <- function(model_name) {
   return(switch (model_name,
-    "One-compartment" = 4,
-    "One-compartment (Downweighted SO)" = 4,
-    "Two-compartment" = 7,
-    "Unified" = 8
+    "One-compartment" = 3,
+    "One-compartment (Downweighted SO)" = 3,
+    "Two-compartment" = 5,
+    "Unified" = 6
   ))
 }
 
@@ -1346,57 +1188,97 @@ quality_metric_df <- rss_df %>%
     AIC = 2*N_Pars + n_obs*log(Sigma_Sq),
     BIC = log(n_obs)*N_Pars + n_obs*log(Sigma_Sq),
     .groups = "drop"
-  ) %>%
-  select(!c(Sigma_Sq, N_Pars))
+  )
 
 ## Plot ####
-quality_metric_plot <- ggplot(
-  quality_metric_df %>% 
-    filter(Model %in% c("Two-compartment", "Unified")) %>%
-    pivot_longer(c(RSS, AIC, BIC)),
-  aes(
-    Model, value
-  )
-) +
-  geom_violin(draw_quantiles = c(0.25, 0.5, 0.75)) +
-  stat_summary(fun.data = function(x) mean_sdl(x, mult = 1), color = "#9F1924") +
-  facet_wrap(vars(factor(name, levels = c("RSS", "AIC", "BIC"))), scales = "free_y") +
-  labs(
-    y = "Value"
-  ) +
-  theme_classic()
-
-ggsave(
-  filename = "img/quality_metric.png",
-  plot = quality_metric_plot,
-  units = "cm",
-  width = 20,
-  height = 12
-)
-
-all_models_metric_plot <- ggplot(
+rss_dist_plt <- 
+  ggplot(
   quality_metric_df %>% 
     filter(!grepl("Down", Model)) %>%
-    # filter(Model != "One-compartment") %>%
-    # filter(RSS < 75) %>%
-    pivot_longer(c(AIC, BIC)),
+    pivot_longer(c(RSS)),
   aes(
-    Model, value
+    x = value, color = Model, y = after_stat(scaled)
   )
 ) +
-  geom_violin(draw_quantiles = c(0.25, 0.5, 0.75)) +
-  # geom_point() +
-  stat_summary(fun.data = function(x) mean_sdl(x, mult = 1), color = "#9F1924") +
-  facet_wrap(vars(factor(name, levels = c("RSS", "AIC", "BIC"))), scales = "free_y") +
+  scale_x_log10() +
+  geom_density(fill = "gray", alpha = 0.3, linewidth = 1) +
+  # facet_grid(cols = vars(name), rows = vars(Model), scales = "free_x") +
+  facet_wrap(vars(name), scales = "free_x") +
   labs(
-    y = "Value"
+    y = "Frequency",
+    x = "Value"
   ) +
-  theme_classic()
+  theme_classic() +
+  theme(
+    legend.position = "none",
+    strip.text.y = element_text(size = 6)
+  ) +
+  scale_color_manual(values = c("#FF5555", "#33DD33", "#7777FF")) +
+  scale_y_continuous(breaks = c(0, 0.5, 1))
 
 ggsave(
-  filename = "img/all_model_metrics.png",
-  plot = all_models_metric_plot,
+  filename = "img/rss_dist.png",
+  plot = rss_dist_plt,
   units = "cm",
-  width = 20,
-  height = 10
+  width = 15, height = 10
+)
+
+aic_dist_plt <- ggplot(
+  quality_metric_df %>% 
+    filter(!grepl("Down", Model)) %>%
+    pivot_longer(c(AIC)),
+  aes(
+    x = value, color = Model, y = after_stat(scaled)
+  )
+) +
+  geom_density(fill = "gray", alpha = 0.3, linewidth = 1) +
+  # facet_grid(cols = vars(name), rows = vars(Model), scales = "free_x") +
+  facet_wrap(vars(name), scales = "free_x") +
+  labs(
+    y = "Frequency",
+    x = "Value"
+  ) +
+  theme_classic() +
+  theme(
+    legend.position = "none",
+    strip.text.y = element_text(size = 6)
+  ) +
+  scale_color_manual(values = c("#FF5555", "#33DD33", "#7777FF")) +
+  scale_y_continuous(breaks = c(0, 0.5, 1))
+
+ggsave(
+  filename = "img/aic_dist.png",
+  plot = aic_dist_plt,
+  units = "cm",
+  width = 15, height = 10
+)
+
+bic_dist_plt <- ggplot(
+  quality_metric_df %>% 
+    filter(!grepl("Down", Model)) %>%
+    pivot_longer(c(BIC)),
+  aes(
+    x = value, color = Model, y = after_stat(scaled)
+  )
+) +
+  geom_density(fill = "gray", alpha = 0.3, linewidth = 1) +
+  # facet_grid(cols = vars(name), rows = vars(Model), scales = "free_x") +
+  facet_wrap(vars(name), scales = "free_x") +
+  labs(
+    y = "Frequency",
+    x = "Value"
+  ) +
+  theme_classic() +
+  theme(
+    legend.position = "none",
+    strip.text.y = element_text(size = 6)
+  ) +
+  scale_color_manual(values = c("#FF5555", "#33DD33", "#7777FF")) +
+  scale_y_continuous(breaks = c(0, 0.5, 1))
+
+ggsave(
+  filename = "img/bic_dist.png",
+  plot = bic_dist_plt,
+  units = "cm",
+  width = 15, height = 12
 )

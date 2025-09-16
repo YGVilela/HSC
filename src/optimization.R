@@ -14,6 +14,8 @@ base_params = c(
 
 # Get differences ####
 get_differences <- function(sim_results, nr_sims, subject) {
+  eps <- 1e-8
+  
   # Diversity: ####
   diversity_df <- 
     # Get the mean simulation results
@@ -31,7 +33,7 @@ get_differences <- function(sim_results, nr_sims, subject) {
     ) %>%
     filter(Time > 360) %>%
     mutate(
-      Res = log10(Nr_Clones_Sim) - log10(Nr_Clones_Data)
+      Res = log10(coalesce(Nr_Clones_Sim, 0) + eps) - log10(coalesce(Nr_Clones_Data, 0) + eps)
     ) %>%
     # Return points and residuals
     select(
@@ -68,7 +70,7 @@ get_differences <- function(sim_results, nr_sims, subject) {
     # filter(Time %in% compared_tps) %>%
     mutate(
       # Before taking difference, change NA to 1 so when log10 its applied it becomes 0
-      Res = log10(coalesce(Frequency_Sim, 1)) -  log10(coalesce(Frequency_Data, 1))
+      Res = log10(coalesce(Frequency_Sim, 0) + eps) -  log10(coalesce(Frequency_Data, 0) + eps)
     ) %>%
     # Return points and residuals
     select(
@@ -99,8 +101,8 @@ get_differences <- function(sim_results, nr_sims, subject) {
     mutate(
       # Before taking the log, change 0 to 1 so when log10 its applied it becomes 0
       Res =
-        log10(SO_Clone_Contribution_Sim + (SO_Clone_Contribution_Sim == 0)) -
-        log10(SO_Clone_Contribution_Data + (SO_Clone_Contribution_Data == 0))
+        log10(coalesce(SO_Clone_Contribution_Sim, 0) + eps) -
+        log10(coalesce(SO_Clone_Contribution_Data, 0) +  eps)
     ) %>%
     # Return points and residuals
     select(
@@ -148,64 +150,66 @@ run_one_cell <- function(
     # print(paste("Running subject", subject))
   }
   
-  # Init simulation parameters ####
-  pars <- base_params
-  for(name in names(optimized_params)) {
-    pars[[name]] <- optimized_params[[name]]
-  }
+  # # Init simulation parameters ####
+  # pars <- base_params
+  # for(name in names(optimized_params)) {
+  #   pars[[name]] <- optimized_params[[name]]
+  # }
+  # 
+  # pA <- pars[["pA"]]
+  # dA <- pars[["dA"]]
+  # tQA <- pars[["tQA"]]
+  # tAQ <- pars[["tAQ"]]
+  # pQ <- pars[["pQ"]]
+  # 
+  # nr_clones <- ceiling(pars[["clone_mult"]]*1e4)
+  # if(nr_clones <= 0) {
+  #   stop("Nr clones is 0.")
+  # }
+  # 
+  # 
+  # # Set carrying capacity based on equilibrium
+  # eq_A <- pars[["space_mult_A"]]*nr_clones
+  # eq_Q <- pars[["space_mult_Q"]]*nr_clones
+  # 
+  # if(eq_A <= 0) {
+  #   stop("Active population on equilibrium is 0")
+  # }
+  # 
+  # if(eq_Q <= 0) {
+  #   stop("Quiescent population on equilibrium is 0")
+  # }
+  # 
+  # kA <- eq_A*pA/(pA - dA)
+  # 
+  # kQ <- ifelse(
+  #   tAQ > 0 & tQA > 0,
+  #   eq_Q*(tAQ*pA*eq_A)/(tAQ*pA*eq_A - tQA*dA*eq_Q),
+  #   1
+  # )
+  # if(kA < 0) {
+  #   stop("Negative kA")
+  # }
+  # if(kQ < 0) {
+  #   stop("Negative kQ")
+  # }
   
-  pA <- pars[["pA"]]
-  dA <- pars[["dA"]]
-  tQA <- pars[["tQA"]]
-  tAQ <- pars[["tAQ"]]
-  pQ <- pars[["pQ"]]
-  
-  nr_clones <- ceiling(pars[["clone_mult"]]*1e4)
-  if(nr_clones <= 0) {
-    stop("Nr clones is 0.")
-  }
-  
+  model_pars <- transform_pars(optimized_params)
   init_A <- 1
   init_Q <- 0
-  
-  # Set carrying capacity based on equilibrium
-  eq_A <- pars[["space_mult_A"]]*nr_clones
-  eq_Q <- pars[["space_mult_Q"]]*nr_clones
-  
-  if(eq_A <= 0) {
-    stop("Active population on equilibrium is 0")
-  }
-  
-  if(eq_Q <= 0) {
-    stop("Quiescent population on equilibrium is 0")
-  }
-  
-  kA <- eq_A*pA/(pA - dA)
-  
-  kQ <- ifelse(
-    tAQ > 0 & tQA > 0,
-    eq_Q*(tAQ*pA*eq_A)/(tAQ*pA*eq_A - tQA*dA*eq_Q),
-    1
-  )
-  if(kA < 0) {
-    stop("Negative kA")
-  }
-  if(kQ < 0) {
-    stop("Negative kQ")
-  }
   
   loop_fun <- ifelse(sim_parallel, parallel::mclapply, lapply)
   
   # Simulate ####
   sim_results <- loop_fun(1:nr_sims, function(sim_idx) 
-    return(simulate_HSC(
+    with(as.list(model_pars), {return(simulate_HSC(
       nr_clones,
       pA, dA, tQA, tAQ, pQ,
       kA, kQ,
       init_A, init_Q,
       data_tps[[subject]],
       sample_sizes_vector[[subject]]
-    ))
+    ))})
   )
   if(return_result) {
     return(sim_results)
