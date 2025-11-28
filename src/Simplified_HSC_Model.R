@@ -113,7 +113,6 @@ simulate_HSC <- function(
           tmp <- table(curr_A[sampled_HSC])
           
           active_history[paste0("x", names(tmp)), paste0("t", tp)] <- tmp
-          curr_A <- curr_A[-sampled_HSC]
         }
         
         

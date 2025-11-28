@@ -57,6 +57,16 @@ get_contribution_dist_df <- function(sim_data, tps = NULL, break_list = NULL, ke
     curr_data <- sim_data[, paste0("t", tp)]
     
     existing_clones <- which(curr_data > 0)
+    if(length(existing_clones) == 0) {
+      return(data.frame(
+        Time = tp,
+        Engrafment_Phase = engrafment_phase(tp),
+        
+        Clone_Contribution = 0,
+        Frequency = 1
+      ))
+    }
+    
     existing_clone_data <- curr_data[existing_clones]
     
     cell_count <- sum(existing_clone_data)
