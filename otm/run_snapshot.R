@@ -231,11 +231,11 @@ transform_pars <- function(otm_pars) {
     aux_pars[[name]] <- otm_pars[[name]]
   }
   
-  pA <- aux_pars[["pA"]]
-  dA <- aux_pars[["dA"]]
-  tQA <- aux_pars[["tQA"]]
-  tAQ <- aux_pars[["tAQ"]]
-  pQ <- aux_pars[["pQ"]]
+  pA <- max(aux_pars[["pA"]], 0)
+  dA <- max(aux_pars[["dA"]], 0)
+  tQA <- max(aux_pars[["tQA"]], 0)
+  tAQ <- max(aux_pars[["tAQ"]], 0)
+  pQ <- max(aux_pars[["pQ"]], 0)
   
   nr_clones <- ceiling(aux_pars[["clone_mult"]]*1e4)
   if(nr_clones <= 0) {
