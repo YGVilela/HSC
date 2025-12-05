@@ -6,10 +6,10 @@ base_path <- "snapshot_data_unified"
 # out_two <- file.path(base_path, "two")
 out_unified <- file.path(base_path, "unified")
 # out_one_dw_SO <- file.path(base_path, "one_dw_SO")
-generationSize <- 2
-generations <- 2
-nr_sims <- 1
-cores <- 2
+generationSize <- 1000
+generations <- 50
+nr_sims <- 10
+cores <- 100
 
 ## Checks ####
 if(cores > parallel::detectCores()) {
