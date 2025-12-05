@@ -1,15 +1,15 @@
 # Execution vars ####
 
 ## Def ####
-base_path <- "snapshot_data"
-out_one <- file.path(base_path, "one")
-out_two <- file.path(base_path, "two")
+base_path <- "snapshot_data_unified"
+# out_one <- file.path(base_path, "one")
+# out_two <- file.path(base_path, "two")
 out_unified <- file.path(base_path, "unified")
-out_one_dw_SO <- file.path(base_path, "one_dw_SO")
-generationSize <- 1000
-generations <- 50
-nr_sims <- 10
-cores <- 100
+# out_one_dw_SO <- file.path(base_path, "one_dw_SO")
+generationSize <- 2
+generations <- 2
+nr_sims <- 1
+cores <- 2
 
 ## Checks ####
 if(cores > parallel::detectCores()) {
@@ -20,9 +20,9 @@ if(cores > parallel::detectCores()) {
   ))
 }
 
-dir.create(out_one, recursive = TRUE, showWarnings = FALSE)
-dir.create(out_one_dw_SO, recursive = TRUE, showWarnings = FALSE)
-dir.create(out_two, recursive = TRUE, showWarnings = FALSE)
+# dir.create(out_one, recursive = TRUE, showWarnings = FALSE)
+# dir.create(out_one_dw_SO, recursive = TRUE, showWarnings = FALSE)
+# dir.create(out_two, recursive = TRUE, showWarnings = FALSE)
 dir.create(out_unified, recursive = TRUE, showWarnings = FALSE)
 
 
@@ -460,21 +460,21 @@ run_ga <- function(
 }
 
 # Run! ####
-bounds_two <- list(
-  "names" = c("pA", "dA", "tQA", "tAQ", "clone_mult"),
-  "lower" = c(0.4,  0.025,  0.0001,  0.01,  3),
-  "upper" = c(0.9, 0.15, 0.03, 0.075, 12)
-)
-
-run_ga(
-  bounds = bounds_two,
-  base_iter_path = file.path(out_two, "iter_"),
-  final_path = file.path(out_two, "final.Rda"),
-  generationSize = generationSize,
-  generations = generations,
-  nr_sims = nr_sims,
-  cores = cores
-)
+# bounds_two <- list(
+#   "names" = c("pA", "dA", "tQA", "tAQ", "clone_mult"),
+#   "lower" = c(0.4,  0.025,  0.0001,  0.01,  3),
+#   "upper" = c(0.9, 0.15, 0.03, 0.075, 12)
+# )
+# 
+# run_ga(
+#   bounds = bounds_two,
+#   base_iter_path = file.path(out_two, "iter_"),
+#   final_path = file.path(out_two, "final.Rda"),
+#   generationSize = generationSize,
+#   generations = generations,
+#   nr_sims = nr_sims,
+#   cores = cores
+# )
 
 ## Unified #### 
 bounds_unified <- list(
@@ -494,130 +494,130 @@ run_ga(
 )
 
 ## One Compartment ####
-bounds_one <- list(
-  "names" = c("pA", "dA", "clone_mult"),
-  "lower" = c(0.1,  0.025,  3),
-  "upper" = c(0.9, 0.15, 20)
-)
-
-run_ga(
-  bounds = bounds_one,
-  base_iter_path = file.path(out_one, "iter_"),
-  final_path = file.path(out_one, "final.Rda"),
-  generationSize = generationSize,
-  generations = generations,
-  nr_sims = nr_sims,
-  cores = cores
-)
-
-
-## Downweighted SO ####
-### Functions ####
-evaluate_metric_dw_SO <- function(full_res, SO_Weight) {
-  # Merge residuals with weights df
-  merge(full_res, weight_df) %>%
-    # Normalize residual with graph weight
-    mutate(Normalized_Res = Res*Graph_Weight) %>%
-    # Evaluate mean distance (Squared distance) for each graph in each simulation
-    group_by(Animal_Id, Graph, Sim_Idx) %>%
-    summarise(RSM = mean(Normalized_Res**2), .groups = "drop") %>%
-    # Evaluate mean distance for each graph across simulations
-    group_by(Animal_Id, Graph) %>%
-    summarise(RSM = mean(RSM), .groups = "drop") %>%
-    # Down weight SO
-    mutate(RSM = ifelse(Graph == "SO", RSM*SO_Weight, RSM)) %>%
-    # Sum the distance of all graphs 
-    select(RSM) %>%
-    sum() %>%
-    return()
-}
-
-obj_func_dw_SO <- function(otm_pars, par_names, nr_sims, SO_Weight) {
-  names(otm_pars) <- par_names
-  simulation_pars <- transform_pars(otm_pars)
-  
-  res_df <- lapply(1:nr_sims, function(sim_idx) {
-    animal_id_list <- c("Z14004", "Z13264")
-    
-    residual_list <- lapply(animal_id_list, function(animal_id)
-      simulate_HSC(
-        simulation_pars,
-        init_A = 1, init_Q = 0,
-        tps = data_tps[[animal_id]],
-        sample_sizes = sample_sizes_vector[[animal_id]]
-      ) %>% 
-        evaluate_res(animal_id) %>%
-        mutate(Animal_Id = animal_id)
-    )
-    
-    return(
-      bind_rows(residual_list) %>% mutate(Sim_Idx = sim_idx)
-    )
-  }) %>% bind_rows()
-  
-  obj_value <- evaluate_metric_dw_SO(res_df, SO_Weight)
-  
-  return(obj_value)
-}
-
-run_ga_dw_SO <- function(
-    bounds,
-    base_iter_path,
-    final_path,
-    generationSize,
-    generations,
-    nr_sims,
-    cores = 2,
-    initial_population = NULL,
-    SO_Weight = 1
-) {
-  start_time <- Sys.time()
-  ga_res <- ga(
-    type = "real-valued",
-    fitness = function(x) tryCatch(
-      -obj_func_dw_SO(x, bounds$names, nr_sims, SO_Weight),
-      error = function(e) {
-        print(conditionMessage(e))
-        
-        return(-1e10)
-      }
-    ),
-    names = bounds$names,
-    lower = bounds$lower,
-    upper = bounds$upper,
-    popSize = generationSize,
-    maxiter = generations,
-    run = 15,
-    parallel = cores,
-    postFitness = function(obj, ...) postfit(obj, base_iter_path),
-    monitor = TRUE,
-    keepBest = TRUE,
-    suggestions = initial_population
-  )
-  end_time <- Sys.time()
-  print(end_time - start_time)
-  
-  save(
-    ga_res,
-    file = final_path
-  )
-  print(paste("Final result saved on", final_path))
-}
-
-### Run ####
-bounds_one <- list(
-  "names" = c("pA", "dA", "clone_mult"),
-  "lower" = c(0.1,  0.025,  3),
-  "upper" = c(0.9, 0.15, 20)
-)
-
-run_ga_dw_SO(
-  bounds = bounds_one,
-  base_iter_path = file.path(out_one_dw_SO, "iter_"),
-  final_path = file.path(out_one_dw_SO, "final.Rda"),
-  generationSize = generationSize,
-  generations = generations,
-  nr_sims = nr_sims,
-  cores = cores,
-  SO_Weight = 0.05
-)
+# bounds_one <- list(
+#   "names" = c("pA", "dA", "clone_mult"),
+#   "lower" = c(0.1,  0.025,  3),
+#   "upper" = c(0.9, 0.15, 20)
+# )
+# 
+# run_ga(
+#   bounds = bounds_one,
+#   base_iter_path = file.path(out_one, "iter_"),
+#   final_path = file.path(out_one, "final.Rda"),
+#   generationSize = generationSize,
+#   generations = generations,
+#   nr_sims = nr_sims,
+#   cores = cores
+# )
+# 
+# 
+# ## Downweighted SO ####
+# ### Functions ####
+# evaluate_metric_dw_SO <- function(full_res, SO_Weight) {
+#   # Merge residuals with weights df
+#   merge(full_res, weight_df) %>%
+#     # Normalize residual with graph weight
+#     mutate(Normalized_Res = Res*Graph_Weight) %>%
+#     # Evaluate mean distance (Squared distance) for each graph in each simulation
+#     group_by(Animal_Id, Graph, Sim_Idx) %>%
+#     summarise(RSM = mean(Normalized_Res**2), .groups = "drop") %>%
+#     # Evaluate mean distance for each graph across simulations
+#     group_by(Animal_Id, Graph) %>%
+#     summarise(RSM = mean(RSM), .groups = "drop") %>%
+#     # Down weight SO
+#     mutate(RSM = ifelse(Graph == "SO", RSM*SO_Weight, RSM)) %>%
+#     # Sum the distance of all graphs 
+#     select(RSM) %>%
+#     sum() %>%
+#     return()
+# }
+# 
+# obj_func_dw_SO <- function(otm_pars, par_names, nr_sims, SO_Weight) {
+#   names(otm_pars) <- par_names
+#   simulation_pars <- transform_pars(otm_pars)
+#   
+#   res_df <- lapply(1:nr_sims, function(sim_idx) {
+#     animal_id_list <- c("Z14004", "Z13264")
+#     
+#     residual_list <- lapply(animal_id_list, function(animal_id)
+#       simulate_HSC(
+#         simulation_pars,
+#         init_A = 1, init_Q = 0,
+#         tps = data_tps[[animal_id]],
+#         sample_sizes = sample_sizes_vector[[animal_id]]
+#       ) %>% 
+#         evaluate_res(animal_id) %>%
+#         mutate(Animal_Id = animal_id)
+#     )
+#     
+#     return(
+#       bind_rows(residual_list) %>% mutate(Sim_Idx = sim_idx)
+#     )
+#   }) %>% bind_rows()
+#   
+#   obj_value <- evaluate_metric_dw_SO(res_df, SO_Weight)
+#   
+#   return(obj_value)
+# }
+# 
+# run_ga_dw_SO <- function(
+#     bounds,
+#     base_iter_path,
+#     final_path,
+#     generationSize,
+#     generations,
+#     nr_sims,
+#     cores = 2,
+#     initial_population = NULL,
+#     SO_Weight = 1
+# ) {
+#   start_time <- Sys.time()
+#   ga_res <- ga(
+#     type = "real-valued",
+#     fitness = function(x) tryCatch(
+#       -obj_func_dw_SO(x, bounds$names, nr_sims, SO_Weight),
+#       error = function(e) {
+#         print(conditionMessage(e))
+#         
+#         return(-1e10)
+#       }
+#     ),
+#     names = bounds$names,
+#     lower = bounds$lower,
+#     upper = bounds$upper,
+#     popSize = generationSize,
+#     maxiter = generations,
+#     run = 15,
+#     parallel = cores,
+#     postFitness = function(obj, ...) postfit(obj, base_iter_path),
+#     monitor = TRUE,
+#     keepBest = TRUE,
+#     suggestions = initial_population
+#   )
+#   end_time <- Sys.time()
+#   print(end_time - start_time)
+#   
+#   save(
+#     ga_res,
+#     file = final_path
+#   )
+#   print(paste("Final result saved on", final_path))
+# }
+# 
+# ### Run ####
+# bounds_one <- list(
+#   "names" = c("pA", "dA", "clone_mult"),
+#   "lower" = c(0.1,  0.025,  3),
+#   "upper" = c(0.9, 0.15, 20)
+# )
+# 
+# run_ga_dw_SO(
+#   bounds = bounds_one,
+#   base_iter_path = file.path(out_one_dw_SO, "iter_"),
+#   final_path = file.path(out_one_dw_SO, "final.Rda"),
+#   generationSize = generationSize,
+#   generations = generations,
+#   nr_sims = nr_sims,
+#   cores = cores,
+#   SO_Weight = 0.05
+# )
