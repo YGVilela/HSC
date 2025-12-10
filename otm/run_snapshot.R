@@ -1,7 +1,7 @@
 # Execution vars ####
 
 ## Def ####
-base_path <- "snapshot_data_unified"
+base_path <- "data_unified_eq"
 # out_one <- file.path(base_path, "one")
 # out_two <- file.path(base_path, "two")
 out_unified <- file.path(base_path, "unified")
@@ -477,6 +477,13 @@ run_ga <- function(
 # )
 
 ## Unified #### 
+# Starting with the 100 best parameters for the two compartment as suggestions
+load("unified_suggestions.Rda")
+nrSuggestions <- 100
+top_idx <- sort(ga_res@fitness, index.return = TRUE, decreasing = TRUE)$ix[1:nrSuggestions]
+initial_population <- cbind(ga_res@population[top_idx, ], rep(0, nrSuggestions))
+colnames(initial_population) <- c("pA", "dA", "tQA", "tAQ", "clone_mult", "pQ")
+
 bounds_unified <- list(
   "names" = c("pA", "dA", "tQA", "tAQ", "clone_mult", "pQ"),
   "lower" = c(0.4,  0.025,  0.0001,  0.01,  3, -0.05),
@@ -490,7 +497,8 @@ run_ga(
   generationSize = generationSize,
   generations = generations,
   nr_sims = nr_sims,
-  cores = cores
+  cores = cores,
+  initial_population = initial_population
 )
 
 ## One Compartment ####
