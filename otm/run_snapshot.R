@@ -479,7 +479,7 @@ run_ga <- function(
 ## Unified #### 
 # Starting with the 100 best parameters for the two compartment as suggestions
 load("unified_suggestions.Rda")
-nrSuggestions <- 100
+nrSuggestions <- 10
 top_idx <- sort(ga_res@fitness, index.return = TRUE, decreasing = TRUE)$ix[1:nrSuggestions]
 initial_population <- cbind(ga_res@population[top_idx, ], rep(0, nrSuggestions))
 colnames(initial_population) <- c("pA", "dA", "tQA", "tAQ", "clone_mult", "pQ")
