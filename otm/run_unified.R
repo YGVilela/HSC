@@ -1,8 +1,9 @@
 # Execution vars ####
 
 ## Def ####
-base_path <- "data_unified_eq"
-out_unified <- base_path
+base_path <- "last_run"
+out_unified <- file.path(base_path, "unified")
+out_two <- file.path(base_path, "two")
 generationSize <- 1000
 generations <- 50
 nr_sims <- 10
@@ -18,6 +19,7 @@ if(cores > parallel::detectCores()) {
 }
 
 dir.create(out_unified, recursive = TRUE, showWarnings = FALSE)
+dir.create(out_two, recursive = TRUE, showWarnings = FALSE)
 
 
 # External libraries ####
@@ -63,12 +65,12 @@ simulate_HSC <- function(
       size_Q <- length(curr_Q)
       
       # Update rates
-      prol_rate <- pA*(1 - size_A/kA)
-      diff_rate <- dA
-      deact_rate <- tAQ*(1 - size_Q/kQ)
-      act_rate <- tQA*(1 - size_A/kA)
-      simple_act_rate <- act_rate*(1 - pQ)
-      prol_act_rate <- act_rate*pQ
+      prol_rate <- max(pA*(1 - size_A/kA), 0)
+      diff_rate <- max(dA, 0)
+      deact_rate <- max(tAQ*(1 - size_Q/kQ), 0)
+      act_rate <- max(tQA*(1 - size_A/kA), 0)
+      simple_act_rate <- max(act_rate*(1 - pQ), 0)
+      prol_act_rate <- max(act_rate*pQ, 0)
       
       # Check rates
       if(diff_rate+prol_rate+deact_rate > base_rate) {
@@ -420,13 +422,16 @@ postfit <- function(curr_ga, base_iter_path) {
 
 # Mutate pQ preferentially
 mutationFunc <- function(object, parent) {
-  # pQ mutates twice as much
-  sampleProb <- c(rep(1, 5), 2)
+  sampleProb <- rep(1, 5)
+  if(length(object@names) == 6) {
+    # pQ mutates twice as much
+    sampleProb <- c(sampleProb, 2)
+  }
   sampleProb <- sampleProb/sum(sampleProb)
   
-  mutate <- parent <- as.vector(object@population[parent,])
+  mutate <- as.vector(object@population[parent,])
   
-  j <- sample(1:6, size = 1, prob = sampleProb)
+  j <- sample(1:length(sampleProb), size = 1, prob = sampleProb)
   
   # When closer to fit, mutate less
   iter <- object@iter
@@ -490,7 +495,7 @@ run_ga <- function(
     suggestions = initial_population,
     mutation = mutationFunc, # pQ mutates more often, mutation range decreases when closer to fixation
     pmutation = pmutationFunc, # Increase mutation rate when closer to fixation
-    elitism = 10 # Only top 10 (1%) individuals guaranteed to survive
+    elitism = 1 # Only top individual guaranteed to survive
   )
   end_time <- Sys.time()
   print(end_time - start_time)
@@ -502,13 +507,64 @@ run_ga <- function(
   print(paste("Final result saved on", final_path))
 }
 
-## Unified #### 
 # Starting with the best parameters for the two compartment as suggestions changing pQ
 load("unified_suggestions.Rda")
-nrSuggestions <- 10
-initial_population <- cbind(
-  matrix(rep(ga_res@solution[1,], nrSuggestions), byrow=TRUE, nrow = nrSuggestions), 
-  0.1*(0:(nrSuggestions-1))/(nrSuggestions-1)
+nrSuggestions <- 100
+nrMutations <- 10
+
+ord <- order(ga_res@fitness, decreasing = TRUE)
+PopSorted <- ga_res@population[ord,,drop=FALSE]
+ga_res@population <- PopSorted
+u <- which(!duplicated(PopSorted, margin = 1))
+topInd <- PopSorted[u[1:nrSuggestions],]
+
+## Two compartment ####
+mutateInit <- function(originalPop) {
+  n <- length(originalPop[,1])
+  allJ <- sample(1:5, size = n, replace = TRUE)
+  
+  for(row in 1:n) {
+    j <- allJ[row]
+    newValue <- originalPop[row, j] + runif(1, -0.01, 0.01)*(ga_res@upper[j] - ga_res@lower[j])
+    if(newValue < ga_res@lower[j]) {
+      newValue <- ga_res@lower[j]
+    }
+    if(newValue > ga_res@upper[j]) {
+      newValue <- ga_res@upper[j]
+    }
+    
+    originalPop[row, j] <- newValue
+  }
+  
+  return(originalPop)
+}
+initial_population <- do.call("rbind", 
+  lapply(1:nrMutations, function(idx_m) mutateInit(topInd))
+)
+colnames(initial_population) <- c("pA", "dA", "tQA", "tAQ", "clone_mult")
+
+bounds_two <- list(
+  "names" = c("pA", "dA", "tQA", "tAQ", "clone_mult"),
+  "lower" = c(0.4,  0.025,  0.0001,  0.01,  3),
+  "upper" = c(0.9, 0.15, 0.03, 0.075, 12)
+)
+
+base_iter_path <- file.path(out_two, "iter_")
+final_path <- file.path(out_two, "final.Rda")
+run_ga(
+  bounds = bounds_two,
+  generationSize = generationSize,
+  generations = generations,
+  nr_sims = nr_sims,
+  cores = cores,
+  initial_population = initial_population
+)
+
+## Unified #### 
+pQRange <- 0.1*(0:(nrMutations - 1))/(nrMutations-1)
+
+initial_population <- do.call("rbind", 
+  lapply(pQRange, function(pQ) cbind(topInd, rep(pQ, nrSuggestions)))
 )
 colnames(initial_population) <- c("pA", "dA", "tQA", "tAQ", "clone_mult", "pQ")
 
