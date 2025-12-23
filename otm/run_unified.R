@@ -3,10 +3,9 @@
 ## Def ####
 base_path <- "last_run"
 out_unified <- file.path(base_path, "unified")
-out_two <- file.path(base_path, "two")
 generationSize <- 1000
 generations <- 50
-nr_sims <- 10
+nr_sims <- 30
 cores <- 100
 
 ## Checks ####
@@ -19,8 +18,6 @@ if(cores > parallel::detectCores()) {
 }
 
 dir.create(out_unified, recursive = TRUE, showWarnings = FALSE)
-dir.create(out_two, recursive = TRUE, showWarnings = FALSE)
-
 
 # External libraries ####
 list.of.packages <- c("dplyr", "GA", "parallel", "doParallel")
@@ -422,11 +419,8 @@ postfit <- function(curr_ga, base_iter_path) {
 
 # Mutate pQ preferentially
 mutationFunc <- function(object, parent) {
-  sampleProb <- rep(1, 5)
-  if(length(object@names) == 6) {
-    # pQ mutates twice as much
-    sampleProb <- c(sampleProb, 2)
-  }
+  # pQ mutates twice as much
+  sampleProb <- c(rep(1, 5), 2)
   sampleProb <- sampleProb/sum(sampleProb)
   
   mutate <- as.vector(object@population[parent,])
@@ -507,58 +501,15 @@ run_ga <- function(
   print(paste("Final result saved on", final_path))
 }
 
-# Starting with the best parameters for the two compartment as suggestions changing pQ
+# Starting with the best parameters for the two compartment as suggestions changing pQ ####
 load("unified_suggestions.Rda")
 nrSuggestions <- 100
 nrMutations <- 10
 
 ord <- order(ga_res@fitness, decreasing = TRUE)
 PopSorted <- ga_res@population[ord,,drop=FALSE]
-ga_res@population <- PopSorted
 u <- which(!duplicated(PopSorted, margin = 1))
 topInd <- PopSorted[u[1:nrSuggestions],]
-
-## Two compartment ####
-mutateInit <- function(originalPop) {
-  n <- length(originalPop[,1])
-  allJ <- sample(1:5, size = n, replace = TRUE)
-  
-  for(row in 1:n) {
-    j <- allJ[row]
-    newValue <- originalPop[row, j] + runif(1, -0.01, 0.01)*(ga_res@upper[j] - ga_res@lower[j])
-    if(newValue < ga_res@lower[j]) {
-      newValue <- ga_res@lower[j]
-    }
-    if(newValue > ga_res@upper[j]) {
-      newValue <- ga_res@upper[j]
-    }
-    
-    originalPop[row, j] <- newValue
-  }
-  
-  return(originalPop)
-}
-initial_population <- do.call("rbind", 
-  lapply(1:nrMutations, function(idx_m) mutateInit(topInd))
-)
-colnames(initial_population) <- c("pA", "dA", "tQA", "tAQ", "clone_mult")
-
-bounds_two <- list(
-  "names" = c("pA", "dA", "tQA", "tAQ", "clone_mult"),
-  "lower" = c(0.4,  0.025,  0.0001,  0.01,  3),
-  "upper" = c(0.9, 0.15, 0.03, 0.075, 12)
-)
-
-base_iter_path <- file.path(out_two, "iter_")
-final_path <- file.path(out_two, "final.Rda")
-run_ga(
-  bounds = bounds_two,
-  generationSize = generationSize,
-  generations = generations,
-  nr_sims = nr_sims,
-  cores = cores,
-  initial_population = initial_population
-)
 
 ## Unified #### 
 pQRange <- 0.1*(0:(nrMutations - 1))/(nrMutations-1)
